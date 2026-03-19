@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
+import time
 from collections import OrderedDict
 from datetime import datetime
+from pathlib import Path
 
 import click
 import jq
 from rich.text import Text
 from rich.tree import Tree as RichTree
-from textual import on
+from textual import on, work
+from textual.worker import get_current_worker
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingsMap
 from textual.containers import Horizontal, Vertical
@@ -33,11 +37,18 @@ LEVEL_COLORS = {
     "warn": "yellow",
     "warning": "yellow",
     "info": "green",
-    "debug": "dim",
+    "debug": "cyan",
     "trace": "dim",
 }
 
 TS_KEYS = {"timestamp", "ts", "time"}
+
+_STATE_DIR = Path.home() / ".local" / "share" / "jnav"
+
+
+def _state_file_for(file_path: str) -> Path:
+    key = hashlib.sha256(str(Path(file_path).resolve()).encode()).hexdigest()[:16]
+    return _STATE_DIR / f"{key}.json"
 
 
 # --- Pure functions ---
@@ -190,6 +201,18 @@ def _sorted_keys(d: dict) -> list[str]:
     return priority + rest
 
 
+def _entry_matches_search(entry: dict, term_lower: str) -> bool:
+    def _check(obj: object) -> bool:
+        if isinstance(obj, str):
+            return term_lower in obj.lower()
+        if isinstance(obj, dict):
+            return any(_check(v) for v in obj.values())
+        if isinstance(obj, list):
+            return any(_check(item) for item in obj)
+        return term_lower in str(obj).lower()
+    return _check(entry)
+
+
 def _text_search_expr(term: str) -> str:
     """Build a jq expression for case-insensitive text search across all string fields."""
     escaped = term.lower().replace("\\", "\\\\").replace('"', '\\"')
@@ -201,77 +224,123 @@ def _text_search_expr(term: str) -> str:
 SELECTED_STYLE = "bold bright_green underline"
 
 
-def _node_label(
+def _value_style(value: object) -> str:
+    if isinstance(value, bool):
+        return "bright_magenta"
+    if value is None:
+        return "dim italic"
+    if isinstance(value, (int, float)):
+        return "bright_cyan"
+    if isinstance(value, str):
+        return "orange3"
+    return ""
+
+
+def _try_parse_json_string(value: object) -> tuple[object, bool]:
+    if isinstance(value, str) and value and value[0] in ('{', '['):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, (dict, list)):
+                return parsed, True
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return value, False
+
+
+JSON_STRING_STYLE = "orange3 italic"
+
+
+def _branch_label(
     key: str, value: object, path: str, custom_selected: set[str],
+    from_json_string: bool = False,
 ) -> Text:
     is_custom = path in custom_selected
     key_style = SELECTED_STYLE if is_custom else "bold"
     if isinstance(value, dict):
-        return Text.assemble((key, key_style), ": ", ("{}", "dim"))
+        indicator = '"{}"' if from_json_string else "{}"
+        ind_style = JSON_STRING_STYLE if from_json_string else "dim"
+        return Text.assemble((key, key_style), (": ", "dim"), (indicator, ind_style))
     elif isinstance(value, list):
-        return Text.assemble((key, key_style), ": ", (f"[{len(value)} items]", "dim"))
-    else:
-        display = _truncate(str(value), 60)
-        return Text.assemble((key, key_style), ": ", (display, ""))
+        n = len(value)
+        indicator = f'"[{n} items]"' if from_json_string else f"[{n} items]"
+        ind_style = JSON_STRING_STYLE if from_json_string else "dim"
+        return Text.assemble((key, key_style), (": ", "dim"), (indicator, ind_style))
+    return Text(key, style="bold")
 
+
+def _leaf_label(key: str, value: object, path: str, custom_selected: set[str]) -> Text:
+    is_custom = path in custom_selected
+    key_style = SELECTED_STYLE if is_custom else "bold"
+    display = _truncate(str(value), 60)
+    return Text.assemble((key, key_style), (": ", "dim"), (display, _value_style(value)))
+
+
+def _index_label(index: int, value: object | None = None) -> Text:
+    if value is None:
+        return Text(f"[{index}]", style="dim")
+    display = _truncate(str(value), 60)
+    return Text.assemble((f"[{index}]", "dim"), (": ", "dim"), (display, _value_style(value)))
+
+
+def _walk_tree(value: object, path: str, selected: set[str], add_branch, add_leaf) -> None:
+    """Shared tree traversal. Calls add_branch(label, children_value, path, orig_value)
+    and add_leaf(label, path, orig_value) for each node."""
+    if isinstance(value, dict):
+        for k in _sorted_keys(value):
+            v = value[k]
+            child_path = f"{path}.{k}" if path else k
+            parsed_v, was_json = _try_parse_json_string(v)
+            if isinstance(parsed_v, (dict, list)):
+                label = _branch_label(k, parsed_v, child_path, selected, from_json_string=was_json)
+                add_branch(label, parsed_v, child_path, v)
+            else:
+                label = _leaf_label(k, v, child_path, selected)
+                add_leaf(label, child_path, v)
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            child_path = f"{path}[{i}]"
+            parsed_item, was_json = _try_parse_json_string(item)
+            if isinstance(parsed_item, (dict, list)):
+                add_branch(_index_label(i), parsed_item, child_path, item)
+            else:
+                add_leaf(_index_label(i, item), child_path, item)
+
+
+# --- Interactive tree (detail panel) ---
 
 def _build_tree(
     node: TreeNode, value: object, path: str = "",
     selected: set[str] | None = None,
 ) -> None:
     sel = selected or set()
-    if isinstance(value, dict):
-        for k in _sorted_keys(value):
-            v = value[k]
-            child_path = f"{path}.{k}" if path else k
-            if isinstance(v, (dict, list)):
-                branch = node.add(
-                    _node_label(k, v, child_path, sel),
-                    data={"path": child_path, "value": v},
-                )
-                _build_tree(branch, v, child_path, sel)
-            else:
-                node.add_leaf(
-                    _node_label(k, v, child_path, sel),
-                    data={"path": child_path, "value": v},
-                )
-    elif isinstance(value, list):
-        for i, item in enumerate(value):
-            child_path = f"{path}[{i}]"
-            if isinstance(item, (dict, list)):
-                branch = node.add(
-                    Text.assemble((f"[{i}]", "dim")),
-                    data={"path": child_path, "value": item},
-                )
-                _build_tree(branch, item, child_path, sel)
-            else:
-                display = _truncate(str(item), 60)
-                node.add_leaf(
-                    Text.assemble((f"[{i}]", "dim"), ": ", (display, "")),
-                    data={"path": child_path, "value": item},
-                )
+
+    def add_branch(label, children_value, child_path, orig_value):
+        branch = node.add(label, data={"path": child_path, "value": orig_value})
+        _build_tree(branch, children_value, child_path, sel)
+
+    def add_leaf(label, child_path, orig_value):
+        node.add_leaf(label, data={"path": child_path, "value": orig_value})
+
+    _walk_tree(value, path, sel, add_branch, add_leaf)
 
 
 def _count_tree_nodes(value: object) -> int:
-    """Count nodes in the Rich tree for a value (matches _populate_rich_tree structure)."""
-    if isinstance(value, dict):
-        count = 0
-        for v in value.values():
-            count += 1
-            if isinstance(v, (dict, list)):
-                count += _count_tree_nodes(v)
-        return count
-    elif isinstance(value, list):
-        count = 0
-        for item in value:
-            count += 1
-            if isinstance(item, (dict, list)):
-                count += _count_tree_nodes(item)
-        return count
-    return 0
+    """Count nodes for scroll offset calculation."""
+    count = 0
+
+    def add_branch(label, children_value, child_path, orig_value):
+        nonlocal count
+        count += 1 + _count_tree_nodes(children_value)
+
+    def add_leaf(label, child_path, orig_value):
+        nonlocal count
+        count += 1
+
+    _walk_tree(value, "", set(), add_branch, add_leaf)
+    return count
 
 
-# --- Rich Tree builder (static, for inline expanded view) ---
+# --- Static tree (inline expanded view) ---
 
 def _build_rich_tree(entry: dict, custom_selected: set[str]) -> RichTree:
     tree = RichTree("", guide_style="dim", hide_root=True)
@@ -282,36 +351,14 @@ def _build_rich_tree(entry: dict, custom_selected: set[str]) -> RichTree:
 def _populate_rich_tree(
     node: RichTree, value: object, path: str, custom_selected: set[str],
 ) -> None:
-    if isinstance(value, dict):
-        for k in _sorted_keys(value):
-            v = value[k]
-            child_path = f"{path}.{k}" if path else k
-            is_custom = child_path in custom_selected
-            key_style = SELECTED_STYLE if is_custom else "bold"
-            if isinstance(v, dict):
-                branch = node.add(Text.assemble((k, key_style)))
-                _populate_rich_tree(branch, v, child_path, custom_selected)
-            elif isinstance(v, list):
-                branch = node.add(
-                    Text.assemble((k, key_style), (f" [{len(v)}]", "dim")),
-                )
-                _populate_rich_tree(branch, v, child_path, custom_selected)
-            else:
-                display = _truncate(str(v), 60)
-                node.add(
-                    Text.assemble((k, key_style), (": ", "dim"), (display, "")),
-                )
-    elif isinstance(value, list):
-        for i, item in enumerate(value):
-            child_path = f"{path}[{i}]"
-            if isinstance(item, (dict, list)):
-                branch = node.add(Text(f"[{i}]", style="dim"))
-                _populate_rich_tree(branch, item, child_path, custom_selected)
-            else:
-                display = _truncate(str(item), 60)
-                node.add(
-                    Text.assemble((f"[{i}]", "dim"), (": ", ""), (display, "")),
-                )
+    def add_branch(label, children_value, child_path, orig_value):
+        branch = node.add(label)
+        _populate_rich_tree(branch, children_value, child_path, custom_selected)
+
+    def add_leaf(label, child_path, orig_value):
+        node.add(label)
+
+    _walk_tree(value, path, custom_selected, add_branch, add_leaf)
 
 
 def _entry_summary(entry: dict, columns: list[str], col_widths: list[int]) -> Text:
@@ -395,6 +442,7 @@ class FilterManagerScreen(ModalScreen):
     BINDINGS = [
         Binding("escape", "maybe_close", "Close", priority=True),
         Binding("a", "add_mode", "Add", show=False),
+        Binding("e", "edit_mode", "Edit", show=False),
         Binding("d", "delete", "Delete", show=False),
         Binding("space", "toggle_item", "Toggle", show=False),
         Binding("o", "toggle_combine", "AND/OR", show=False),
@@ -403,6 +451,7 @@ class FilterManagerScreen(ModalScreen):
     def __init__(self, filters: list[dict]) -> None:
         super().__init__()
         self.filters = filters
+        self._editing_idx: int | None = None
 
     def compose(self) -> ComposeResult:
         yield Vertical(
@@ -410,7 +459,7 @@ class FilterManagerScreen(ModalScreen):
             OptionList(id="filter-list"),
             Input(placeholder="jq expression...", id="filter-add-input", classes="hidden"),
             Static(
-                "[b]a[/b]:Add  [b]space[/b]:Toggle  [b]o[/b]:AND/OR  [b]d[/b]:Delete  [b]esc[/b]:Close",
+                "[b]a[/b]:Add  [b]e[/b]:Edit  [b]space[/b]:Toggle  [b]o[/b]:AND/OR  [b]d[/b]:Delete  [b]esc[/b]:Close",
                 id="filter-hints",
             ),
             id="filter-modal",
@@ -454,9 +503,21 @@ class FilterManagerScreen(ModalScreen):
             self._refresh_list(idx)
 
     def action_add_mode(self) -> None:
+        self._editing_idx = None
         inp = self.query_one("#filter-add-input", Input)
         inp.remove_class("hidden")
         inp.value = ""
+        inp.focus()
+
+    def action_edit_mode(self) -> None:
+        ol = self.query_one("#filter-list", OptionList)
+        idx = ol.highlighted
+        if idx is None or idx >= len(self.filters):
+            return
+        self._editing_idx = idx
+        inp = self.query_one("#filter-add-input", Input)
+        inp.remove_class("hidden")
+        inp.value = self.filters[idx]["expr"]
         inp.focus()
 
     @on(Input.Submitted, "#filter-add-input")
@@ -464,17 +525,27 @@ class FilterManagerScreen(ModalScreen):
         expr = event.value.strip()
         if expr:
             warning = _check_filter_warning(expr)
-            self.filters.append({"expr": expr, "enabled": True})
+            if self._editing_idx is not None:
+                self.filters[self._editing_idx]["expr"] = expr
+                self.filters[self._editing_idx].pop("label", None)
+                highlight = self._editing_idx
+            else:
+                self.filters.append({"expr": expr, "enabled": True})
+                highlight = len(self.filters) - 1
             if warning:
                 self.notify(warning, severity="warning", timeout=3)
+        else:
+            highlight = self._editing_idx
+        self._editing_idx = None
         event.input.value = ""
         self.query_one("#filter-add-input").add_class("hidden")
-        self._refresh_list(len(self.filters) - 1 if expr else None)
+        self._refresh_list(highlight)
         self.query_one("#filter-list", OptionList).focus()
 
     def action_maybe_close(self) -> None:
         inp = self.query_one("#filter-add-input", Input)
         if not inp.has_class("hidden"):
+            self._editing_idx = None
             inp.add_class("hidden")
             inp.value = ""
             self.query_one("#filter-list", OptionList).focus()
@@ -520,6 +591,7 @@ class ColumnManagerScreen(ModalScreen):
     BINDINGS = [
         Binding("escape", "maybe_close", "Close", priority=True),
         Binding("a", "add_mode", "Add", show=False),
+        Binding("e", "edit_mode", "Edit", show=False),
         Binding("d", "delete", "Delete", show=False),
         Binding("space", "toggle_item", "Toggle", show=False),
     ]
@@ -528,6 +600,7 @@ class ColumnManagerScreen(ModalScreen):
         super().__init__()
         self.custom_columns = custom_columns
         self.all_columns = all_columns
+        self._editing_idx: int | None = None
 
     def compose(self) -> ComposeResult:
         yield Vertical(
@@ -539,7 +612,7 @@ class ColumnManagerScreen(ModalScreen):
                 classes="hidden",
             ),
             Static(
-                "[b]a[/b]:Add  [b]space[/b]:Toggle  [b]d[/b]:Delete  [b]esc[/b]:Close",
+                "[b]a[/b]:Add  [b]e[/b]:Edit  [b]space[/b]:Toggle  [b]d[/b]:Delete  [b]esc[/b]:Close",
                 id="column-hints",
             ),
             id="column-modal",
@@ -575,26 +648,47 @@ class ColumnManagerScreen(ModalScreen):
             self._refresh_list(idx)
 
     def action_add_mode(self) -> None:
+        self._editing_idx = None
         inp = self.query_one("#column-add-input", Input)
         inp.remove_class("hidden")
         inp.value = ""
+        inp.focus()
+
+    def action_edit_mode(self) -> None:
+        ol = self.query_one("#column-list", OptionList)
+        idx = ol.highlighted
+        if idx is None or idx >= len(self.custom_columns):
+            return
+        self._editing_idx = idx
+        inp = self.query_one("#column-add-input", Input)
+        inp.remove_class("hidden")
+        inp.value = self.custom_columns[idx]["path"]
         inp.focus()
 
     @on(Input.Submitted, "#column-add-input")
     def on_add_submitted(self, event: Input.Submitted) -> None:
         raw = event.value.strip().lstrip(".")
         if raw:
-            existing = {c["path"] for c in self.custom_columns}
-            if raw not in existing:
-                self.custom_columns.append({"path": raw, "enabled": True})
+            if self._editing_idx is not None:
+                self.custom_columns[self._editing_idx]["path"] = raw
+                highlight = self._editing_idx
+            else:
+                existing = {c["path"] for c in self.custom_columns}
+                if raw not in existing:
+                    self.custom_columns.append({"path": raw, "enabled": True})
+                highlight = len(self.custom_columns) - 1
+        else:
+            highlight = self._editing_idx
+        self._editing_idx = None
         event.input.value = ""
         self.query_one("#column-add-input").add_class("hidden")
-        self._refresh_list(len(self.custom_columns) - 1 if raw else None)
+        self._refresh_list(highlight)
         self.query_one("#column-list", OptionList).focus()
 
     def action_maybe_close(self) -> None:
         inp = self.query_one("#column-add-input", Input)
         if not inp.has_class("hidden"):
+            self._editing_idx = None
             inp.add_class("hidden")
             inp.value = ""
             self.query_one("#column-list", OptionList).focus()
@@ -607,14 +701,16 @@ HELP_TEXT = """\
   [b]j/k[/b]       Navigate entries (or arrow keys)
   [b]h/l[/b]       Switch focus: list ↔ detail
   [b]Ctrl+D/U[/b]  Half-page scroll down/up
-  [b]f[/b]         Manage filters
+  [b]/[/b]         Search (highlight matches, n/N to navigate)
+  [b]n/N[/b]       Next/previous search match
+  [b]f[/b]         Manage filters (hide non-matching entries)
   [b]c[/b]         Manage selected fields
-  [b]Ctrl+F[/b]    Text filter (AND)
-  [b]Ctrl+S[/b]    Text filter (OR)
+  [b]Ctrl+F[/b]    Add text filter (AND)
+  [b]Ctrl+S[/b]    Add text filter (OR)
   [b]space[/b]     Pause/unpause filters
   [b]e[/b]         Toggle expanded view
   [b]d[/b]         Toggle detail panel
-  [b]r[/b]         Reset all filters and fields
+  [b]r[/b]         Reset all filters, fields, and search
   [b]y[/b]         Copy current entry as JSON
   [b]g[/b]         Jump to first entry
   [b]G[/b]         Jump to last entry
@@ -699,10 +795,15 @@ class SearchInputScreen(ModalScreen):
         Binding("escape", "close", "Close", priority=True),
     ]
 
+    def __init__(self, title: str = "Search", placeholder: str = "search term...") -> None:
+        super().__init__()
+        self._title = title
+        self._placeholder = placeholder
+
     def compose(self) -> ComposeResult:
         yield Vertical(
-            Static("Text Search", id="search-title"),
-            Input(placeholder="search term...", id="search-input"),
+            Static(self._title, id="search-title"),
+            Input(placeholder=self._placeholder, id="search-input"),
             id="search-modal",
         )
 
@@ -743,17 +844,29 @@ class DetailTree(Tree):
     ]
 
     _LEADER_BINDINGS = [
-        Binding("f", "noop", "Filter AND"),
-        Binding("o", "noop", "Filter OR"),
-        Binding("n", "noop", "Has field AND"),
-        Binding("N", "noop", "Has field OR"),
-        Binding("escape", "noop", "Cancel"),
+        Binding("f", "leader_filter_and", "Filter AND"),
+        Binding("o", "leader_filter_or", "Filter OR"),
+        Binding("n", "leader_has_and", "Has field AND"),
+        Binding("N", "leader_has_or", "Has field OR"),
+        Binding("escape", "leader_cancel", "Cancel", show=False),
     ]
 
     show_selected_only: bool = False
     _leader_pending: bool = False
 
-    def action_noop(self) -> None:
+    def action_leader_filter_and(self) -> None:
+        pass
+
+    def action_leader_filter_or(self) -> None:
+        pass
+
+    def action_leader_has_and(self) -> None:
+        pass
+
+    def action_leader_has_or(self) -> None:
+        pass
+
+    def action_leader_cancel(self) -> None:
         pass
 
     def on_key(self, event) -> None:
@@ -846,11 +959,24 @@ class JnavApp(App):
     }
     #log-list LogEntryItem {
         padding: 0 1;
+        border-left: blank;
+    }
+    #log-list > LogEntryItem.-highlight {
+        color: $foreground;
+        background: $background-lighten-2;
+        text-style: none;
+        border-left: thick $accent;
+    }
+    #log-list:focus > LogEntryItem.-highlight {
+        color: $foreground;
+        background: $background-lighten-3;
+        text-style: none;
+        border-left: thick $accent;
     }
     .inline-tree {
         display: none;
         padding: 0 0 0 4;
-        color: $text-muted;
+        color: $foreground;
     }
     .expanded-mode .inline-tree {
         display: block;
@@ -868,10 +994,11 @@ class JnavApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("f", "open_filters", "Filters"),
+        Binding("slash", "start_search", "Search", key_display="/"),
+        Binding("f", "open_filters", "Filter"),
         Binding("c", "open_columns", "Fields"),
-        Binding("ctrl+f", "text_search", "Search"),
-        Binding("ctrl+s", "additive_search", "Or search"),
+        Binding("ctrl+f", "text_filter", "Text filter"),
+        Binding("ctrl+s", "text_filter_or", "Text OR"),
         Binding("e", "toggle_expanded", "Expand"),
         Binding("d", "toggle_detail", "Detail"),
         Binding("r", "reset", "Reset"),
@@ -882,6 +1009,8 @@ class JnavApp(App):
         Binding("l", "focus_detail", show=False),
         Binding("ctrl+d", "scroll_half_down", show=False),
         Binding("ctrl+u", "scroll_half_up", show=False),
+        Binding("n", "search_next", show=False),
+        Binding("N", "search_prev", show=False),
         Binding("space", "toggle_filters_pause", show=False),
         Binding("g", "jump_top", show=False),
         Binding("G", "jump_bottom", show=False),
@@ -894,6 +1023,9 @@ class JnavApp(App):
         self,
         entries: list[dict],
         initial_filter: str = "",
+        tail_path: str | None = None,
+        tail_offset: int = 0,
+        state_file: Path | None = None,
     ) -> None:
         super().__init__()
         self.entries = entries
@@ -906,8 +1038,21 @@ class JnavApp(App):
         self._current_entry_index: int = 0
         self._expanded_mode: bool = False
         self._filters_paused: bool = False
+        self._tail_path: str | None = tail_path
+        self._tail_offset: int = tail_offset
+        self._live: bool = tail_path is not None
+        self._follow_next_rebuild: bool = False
+        self._search_term: str = ""
+        self._search_matches: list[int] = []
+        self._search_match_pos: int = -1
+        self._state_file: Path | None = state_file
+        self._detail_visible_on_load: bool = False
+        self._show_selected_only_on_load: bool = False
+        self._load_state()
         if initial_filter:
-            self.filters.append({"expr": initial_filter, "enabled": True})
+            existing = {f["expr"] for f in self.filters}
+            if initial_filter not in existing:
+                self.filters.append({"expr": initial_filter, "enabled": True})
 
     @property
     def active_columns(self) -> list[str]:
@@ -932,11 +1077,73 @@ class JnavApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.query_one("#log-list", ListView).focus()
+        lv = self.query_one("#log-list", ListView)
+        lv.focus()
+
+        if self._expanded_mode:
+            self.query_one("#content-area").add_class("expanded-mode")
+
+        if self._detail_visible_on_load:
+            self.query_one("#detail-tree", DetailTree).add_class("visible")
+
+        detail_tree = self.query_one("#detail-tree", DetailTree)
+        detail_tree.show_selected_only = self._show_selected_only_on_load
+
+        # Defer initial build until after layout so ListView has a real width
+        self.call_after_refresh(self._initial_build)
+
+    def _initial_build(self) -> None:
         self._apply_all_filters()
         self._update_filter_bar()
+
         if self.entries:
-            self._update_detail(self.entries[0])
+            idx = min(self._current_entry_index, len(self.entries) - 1)
+            self._current_entry_index = idx
+            self._update_detail(self.entries[idx])
+
+        if self._tail_path:
+            self._start_tailing()
+
+    def on_resize(self) -> None:
+        self._refresh_list_content()
+
+    # --- State persistence ---
+
+    def _load_state(self) -> None:
+        if not self._state_file or not self._state_file.exists():
+            return
+        try:
+            state = json.loads(self._state_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            return
+        self.filters = state.get("filters", [])
+        self.custom_columns = state.get("custom_columns", [])
+        self._expanded_mode = state.get("expanded_mode", False)
+        self._filters_paused = state.get("filters_paused", False)
+        self._search_term = state.get("search_term", "")
+        self._current_entry_index = state.get("entry_index", 0)
+        self._detail_visible_on_load = state.get("detail_visible", False)
+        self._show_selected_only_on_load = state.get("show_selected_only", False)
+
+    def _save_state(self) -> None:
+        if not self._state_file:
+            return
+        detail = self.query_one("#detail-tree", DetailTree)
+        state = {
+            "filters": self.filters,
+            "custom_columns": self.custom_columns,
+            "expanded_mode": self._expanded_mode,
+            "filters_paused": self._filters_paused,
+            "search_term": self._search_term,
+            "entry_index": self._current_entry_index,
+            "detail_visible": detail.has_class("visible"),
+            "show_selected_only": detail.show_selected_only,
+        }
+        try:
+            self._state_file.parent.mkdir(parents=True, exist_ok=True)
+            self._state_file.write_text(json.dumps(state))
+        except OSError:
+            pass
 
     # --- Filter / column management ---
 
@@ -974,6 +1181,7 @@ class JnavApp(App):
         if self._filters_paused:
             self.visible_indices = list(range(len(self.entries)))
             self._rebuild_list()
+            self._recompute_search_matches()
             return
         matched, error = apply_combined_filters(self.filters, self.entries)
         if error:
@@ -981,6 +1189,7 @@ class JnavApp(App):
             return
         self.visible_indices = matched
         self._rebuild_list()
+        self._recompute_search_matches()
 
     def _update_filter_bar(self) -> None:
         bar = self.query_one("#filter-bar", FilterBar)
@@ -1004,10 +1213,75 @@ class JnavApp(App):
         mode = "Expanded" if self._expanded_mode else "Table"
         parts.append(mode)
 
-        if not self.filters and not self.custom_columns:
-            parts.append("  f: filter  c: fields  ?: help")
+        if self._search_term:
+            total = len(self._search_matches)
+            pos = self._search_match_pos + 1 if total else 0
+            parts.append(f"/{self._search_term} ({pos}/{total})")
+
+        if self._live:
+            parts.append("LIVE")
+
+        if not self.filters and not self.custom_columns and not self._search_term:
+            parts.append("  /: search  f: filter  ?: help")
 
         bar.update("  \u2502  ".join(parts))
+
+    # --- Live tailing ---
+
+    @work(thread=True, exclusive=True)
+    def _start_tailing(self) -> None:
+        path = self._tail_path
+        if not path:
+            return
+        worker = get_current_worker()
+        with open(path) as f:
+            f.seek(self._tail_offset)
+            while not worker.is_cancelled:
+                batch: list[dict] = []
+                while True:
+                    line = f.readline()
+                    if not line:
+                        break
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        if isinstance(obj, dict):
+                            batch.append(obj)
+                    except json.JSONDecodeError:
+                        continue
+                if batch:
+                    self.call_from_thread(self._append_entries, batch)
+                time.sleep(0.5)
+
+    def _append_entries(self, new_entries: list[dict]) -> None:
+        lv = self.query_one("#log-list", ListView)
+        was_at_bottom = (
+            lv.index is not None
+            and len(self.visible_indices) > 0
+            and lv.index >= len(self.visible_indices) - 1
+        )
+        was_empty = len(self.entries) == 0
+
+        self.entries.extend(new_entries)
+
+        for entry in new_entries:
+            for key in _flatten_keys(entry):
+                if key not in self.all_columns:
+                    self.all_columns.append(key)
+
+        if was_empty:
+            self.base_columns = _default_columns(self.all_columns)
+
+        if was_at_bottom:
+            self._follow_next_rebuild = True
+
+        self._apply_all_filters()
+        self._update_filter_bar()
+
+        if was_empty and self.entries:
+            self._update_detail(self.entries[0])
 
     # --- Detail panel ---
 
@@ -1043,6 +1317,20 @@ class JnavApp(App):
         col_widths = _compute_col_widths(
             self.entries, self.visible_indices, display_cols,
         )
+        # Expand message/msg column to fill available width
+        msg_idx = None
+        for i, col in enumerate(display_cols):
+            if col in ("message", "msg"):
+                msg_idx = i
+                break
+        if msg_idx is not None:
+            lv = self.query_one("#log-list", ListView)
+            # 2 for padding, 1 space separator per column, 2 for border
+            used = sum(col_widths) + len(col_widths) + 4
+            available = lv.size.width
+            remaining = available - used + col_widths[msg_idx]
+            if remaining > col_widths[msg_idx]:
+                col_widths[msg_idx] = remaining
         return display_cols, col_widths
 
     def _update_header(self, display_cols: list[str], col_widths: list[int]) -> None:
@@ -1079,6 +1367,10 @@ class JnavApp(App):
             if i == self._current_entry_index:
                 target_list_index = list_idx
 
+        if self._follow_next_rebuild and items:
+            target_list_index = len(items) - 1
+            self._follow_next_rebuild = False
+
         with self.batch_update():
             lv.clear()
             for item in items:
@@ -1109,6 +1401,11 @@ class JnavApp(App):
 
     # --- Actions ---
 
+    def action_quit(self) -> None:
+        self._save_state()
+        self.workers.cancel_all()
+        self.exit()
+
     def _focus_main(self) -> None:
         self.query_one("#log-list", ListView).focus()
 
@@ -1130,19 +1427,76 @@ class JnavApp(App):
             ColumnManagerScreen(self.custom_columns, self.all_columns), on_dismiss,
         )
 
-    def action_text_search(self) -> None:
+    def action_start_search(self) -> None:
         def on_dismiss(term: str | None) -> None:
             if term:
-                expr = _text_search_expr(term)
-                self.add_filter(expr, label=f"search: {term}")
+                self._search_term = term
+                self._recompute_search_matches()
+                self._update_filter_bar()
+                if self._search_matches:
+                    self._search_match_pos = 0
+                    lv = self.query_one("#log-list", ListView)
+                    lv.index = self._search_matches[0]
+                else:
+                    self.notify("No matches found", timeout=2)
         self.push_screen(SearchInputScreen(), on_dismiss)
 
-    def action_additive_search(self) -> None:
+    def _recompute_search_matches(self) -> None:
+        if not self._search_term:
+            self._search_matches = []
+            self._search_match_pos = -1
+            return
+        term_lower = self._search_term.lower()
+        self._search_matches = [
+            list_idx
+            for list_idx, entry_idx in enumerate(self.visible_indices)
+            if _entry_matches_search(self.entries[entry_idx], term_lower)
+        ]
+        self._search_match_pos = -1
+
+    def action_search_next(self) -> None:
+        if not self._search_matches:
+            return
+        lv = self.query_one("#log-list", ListView)
+        current = lv.index or 0
+        for i, match_idx in enumerate(self._search_matches):
+            if match_idx > current:
+                self._search_match_pos = i
+                lv.index = match_idx
+                self._update_filter_bar()
+                return
+        self._search_match_pos = 0
+        lv.index = self._search_matches[0]
+        self._update_filter_bar()
+
+    def action_search_prev(self) -> None:
+        if not self._search_matches:
+            return
+        lv = self.query_one("#log-list", ListView)
+        current = lv.index or 0
+        for i in range(len(self._search_matches) - 1, -1, -1):
+            if self._search_matches[i] < current:
+                self._search_match_pos = i
+                lv.index = self._search_matches[i]
+                self._update_filter_bar()
+                return
+        self._search_match_pos = len(self._search_matches) - 1
+        lv.index = self._search_matches[-1]
+        self._update_filter_bar()
+
+    def action_text_filter(self) -> None:
         def on_dismiss(term: str | None) -> None:
             if term:
                 expr = _text_search_expr(term)
-                self.add_filter(expr, label=f"search: {term}", combine="or")
-        self.push_screen(SearchInputScreen(), on_dismiss)
+                self.add_filter(expr, label=f"text: {term}")
+        self.push_screen(SearchInputScreen("Text Filter (AND)"), on_dismiss)
+
+    def action_text_filter_or(self) -> None:
+        def on_dismiss(term: str | None) -> None:
+            if term:
+                expr = _text_search_expr(term)
+                self.add_filter(expr, label=f"text: {term}", combine="or")
+        self.push_screen(SearchInputScreen("Text Filter (OR)"), on_dismiss)
 
     def action_toggle_expanded(self) -> None:
         lv = self.query_one("#log-list", ListView)
@@ -1207,6 +1561,9 @@ class JnavApp(App):
     def action_reset(self) -> None:
         self.filters.clear()
         self.custom_columns.clear()
+        self._search_term = ""
+        self._search_matches = []
+        self._search_match_pos = -1
         self._apply_all_filters()
         self._update_filter_bar()
         if self._current_detail_entry:
@@ -1308,9 +1665,14 @@ def _parse_entries(lines: list[str]) -> list[dict]:
 @click.option("-f", "--filter", "initial_filter", default="", help="Initial jq filter expression")
 def main(file: str | None, initial_filter: str) -> None:
     """Interactive JSON log viewer with jq filtering."""
+    tail_path: str | None = None
+    tail_offset: int = 0
+
     if file:
         with open(file) as f:
             lines = f.readlines()
+            tail_offset = f.tell()
+        tail_path = file
     elif not sys.stdin.isatty():
         lines = sys.stdin.readlines()
         sys.stdin.close()
@@ -1324,7 +1686,14 @@ def main(file: str | None, initial_filter: str) -> None:
         click.echo("No valid JSON entries found.", err=True)
         raise SystemExit(1)
 
-    app = JnavApp(entries=entries, initial_filter=initial_filter)
+    state_file = _state_file_for(file) if file else None
+    app = JnavApp(
+        entries=entries,
+        initial_filter=initial_filter,
+        tail_path=tail_path,
+        tail_offset=tail_offset,
+        state_file=state_file,
+    )
     app.title = "jnav"
     app.run()
 
