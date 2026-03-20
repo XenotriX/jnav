@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import re
@@ -108,33 +109,59 @@ def _is_truthy(value: object) -> bool:
     return True
 
 
-_jq_cache: dict[str, jq._Program] = {}
+_PATH_SEGMENT_RE = re.compile(r'([^.\[\]]+)|\[(\d+)\]')
+
+
+def _expand_json_strings(obj: object, path: str = "", json_paths: set[str] | None = None) -> object:
+    """Recursively expand JSON-encoded strings, tracking which paths were strings."""
+    if json_paths is None:
+        json_paths = set()
+    if isinstance(obj, dict):
+        return {k: _expand_json_strings(v, f"{path}.{k}" if path else k, json_paths) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_expand_json_strings(item, f"{path}[{i}]", json_paths) for i, item in enumerate(obj)]
+    if isinstance(obj, str) and obj and obj[0] in ('{', '['):
+        try:
+            parsed = json.loads(obj)
+            if isinstance(parsed, (dict, list)):
+                json_paths.add(path)
+                return _expand_json_strings(parsed, path, json_paths)
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return obj
+
+
+def _preprocess_entry(entry: dict) -> tuple[dict, set[str]]:
+    json_paths: set[str] = set()
+    expanded = _expand_json_strings(entry, "", json_paths)
+    return expanded, json_paths
 
 
 def _get_nested(entry: dict, path: str) -> object:
-    # Fast path: simple dotted keys like "data.role"
-    if "[" not in path:
-        obj = entry
-        for part in path.split("."):
+    # Paths with [] (iterator) need jq
+    if "[]" in path:
+        jq_path = "." + path if not path.startswith(".") else path
+        # Convert dotted paths to jq syntax: a.b[].c → .a.b[].c
+        try:
+            prog = jq.compile(f"[{jq_path}]")
+            result = prog.input_value(entry).first()
+            return result if result else ""
+        except Exception:
+            return ""
+    obj = entry
+    for match in _PATH_SEGMENT_RE.finditer(path):
+        key, idx = match.group(1), match.group(2)
+        if key is not None:
             if isinstance(obj, dict):
-                obj = obj.get(part, "")
+                obj = obj.get(key, "")
             else:
                 return ""
-        return obj
-    # Complex paths with array indices: use jq with compilation cache
-    prog = _jq_cache.get(path)
-    if prog is None:
-        jq_path = "." + path if not path.startswith(".") else path
-        try:
-            prog = jq.compile(jq_path)
-        except ValueError:
-            return ""
-        _jq_cache[path] = prog
-    try:
-        result = prog.input_value(entry).first()
-        return result if result is not None else ""
-    except Exception:
-        return ""
+        else:
+            i = int(idx)
+            if isinstance(obj, list) and i < len(obj):
+                obj = obj[i]
+            else:
+                return ""
     return obj
 
 
@@ -201,6 +228,46 @@ def _sorted_keys(d: dict) -> list[str]:
     return priority + rest
 
 
+def _jq_path_to_str(parts: list) -> str:
+    result = ""
+    for p in parts:
+        if isinstance(p, int):
+            result += f"[{p}]"
+        else:
+            result = f"{result}.{p}" if result else p
+    return result
+
+
+def _resolve_selected_paths(columns: set[str], entry: dict) -> set[str]:
+    """Expand jq column expressions into concrete paths for a specific entry."""
+    result: set[str] = set()
+    for col in columns:
+        if "[]" not in col and "|" not in col:
+            result.add(col)
+            continue
+        jq_path = "." + col if not col.startswith(".") else col
+        try:
+            raw = jq.compile(f"[path({jq_path})]").input_value(entry).first()
+            for parts in raw:
+                result.add(_jq_path_to_str(parts))
+            continue
+        except Exception:
+            pass
+        try:
+            results = jq.compile(jq_path).input_value(entry).all()
+            base_expr = jq_path.split("|")[0].strip()
+            raw_bases = jq.compile(f"[path({base_expr})]").input_value(entry).first()
+            for base_parts in raw_bases:
+                base = _jq_path_to_str(base_parts)
+                for r in results:
+                    if isinstance(r, dict):
+                        for key in r:
+                            result.add(f"{base}.{key}")
+        except Exception:
+            result.add(col)
+    return result
+
+
 def _entry_matches_search(entry: dict, term_lower: str) -> bool:
     def _check(obj: object) -> bool:
         if isinstance(obj, str):
@@ -236,17 +303,6 @@ def _value_style(value: object) -> str:
     return ""
 
 
-def _try_parse_json_string(value: object) -> tuple[object, bool]:
-    if isinstance(value, str) and value and value[0] in ('{', '['):
-        try:
-            parsed = json.loads(value)
-            if isinstance(parsed, (dict, list)):
-                return parsed, True
-        except (json.JSONDecodeError, ValueError):
-            pass
-    return value, False
-
-
 JSON_STRING_STYLE = "orange3 italic"
 
 
@@ -268,60 +324,81 @@ def _branch_label(
     return Text(key, style="bold")
 
 
+def _oneline(value: object) -> str:
+    s = str(value)
+    if "\n" in s:
+        first = s[:s.index("\n")]
+        return first + "\u2026"
+    return s
+
+
 def _leaf_label(key: str, value: object, path: str, custom_selected: set[str]) -> Text:
     is_custom = path in custom_selected
     key_style = SELECTED_STYLE if is_custom else "bold"
-    display = _truncate(str(value), 60)
-    return Text.assemble((key, key_style), (": ", "dim"), (display, _value_style(value)))
+    label = Text.assemble((key, key_style), (": ", "dim"), (_oneline(value), _value_style(value)))
+    label.no_wrap = True
+    label.overflow = "ellipsis"
+    return label
 
 
 def _index_label(index: int, value: object | None = None) -> Text:
     if value is None:
         return Text(f"[{index}]", style="dim")
-    display = _truncate(str(value), 60)
-    return Text.assemble((f"[{index}]", "dim"), (": ", "dim"), (display, _value_style(value)))
+    label = Text.assemble((f"[{index}]", "dim"), (": ", "dim"), (_oneline(value), _value_style(value)))
+    label.no_wrap = True
+    label.overflow = "ellipsis"
+    return label
 
 
-def _walk_tree(value: object, path: str, selected: set[str], add_branch, add_leaf) -> None:
-    """Shared tree traversal. Calls add_branch(label, children_value, path, orig_value)
-    and add_leaf(label, path, orig_value) for each node."""
+def _walk_tree(
+    value: object, path: str, selected: set[str],
+    add_branch, add_leaf, search_term: str = "",
+    json_paths: set[str] | None = None,
+) -> None:
+    """Shared tree traversal. Calls add_branch(label, children_value, path, value)
+    and add_leaf(label, path, value) for each node."""
+    jp = json_paths or set()
+
+    def _hl(label: Text) -> Text:
+        return _highlight_text(label, search_term) if search_term else label
+
     if isinstance(value, dict):
         for k in _sorted_keys(value):
             v = value[k]
             child_path = f"{path}.{k}" if path else k
-            parsed_v, was_json = _try_parse_json_string(v)
-            if isinstance(parsed_v, (dict, list)):
-                label = _branch_label(k, parsed_v, child_path, selected, from_json_string=was_json)
-                add_branch(label, parsed_v, child_path, v)
+            if isinstance(v, (dict, list)):
+                from_json = child_path in jp
+                label = _branch_label(k, v, child_path, selected, from_json_string=from_json)
+                add_branch(_hl(label), v, child_path, v)
             else:
                 label = _leaf_label(k, v, child_path, selected)
-                add_leaf(label, child_path, v)
+                add_leaf(_hl(label), child_path, v)
     elif isinstance(value, list):
         for i, item in enumerate(value):
             child_path = f"{path}[{i}]"
-            parsed_item, was_json = _try_parse_json_string(item)
-            if isinstance(parsed_item, (dict, list)):
-                add_branch(_index_label(i), parsed_item, child_path, item)
+            if isinstance(item, (dict, list)):
+                add_branch(_hl(_index_label(i)), item, child_path, item)
             else:
-                add_leaf(_index_label(i, item), child_path, item)
+                add_leaf(_hl(_index_label(i, item)), child_path, item)
 
 
 # --- Interactive tree (detail panel) ---
 
 def _build_tree(
     node: TreeNode, value: object, path: str = "",
-    selected: set[str] | None = None,
+    selected: set[str] | None = None, search_term: str = "",
+    json_paths: set[str] | None = None,
 ) -> None:
     sel = selected or set()
 
     def add_branch(label, children_value, child_path, orig_value):
         branch = node.add(label, data={"path": child_path, "value": orig_value})
-        _build_tree(branch, children_value, child_path, sel)
+        _build_tree(branch, children_value, child_path, sel, search_term, json_paths)
 
     def add_leaf(label, child_path, orig_value):
         node.add_leaf(label, data={"path": child_path, "value": orig_value})
 
-    _walk_tree(value, path, sel, add_branch, add_leaf)
+    _walk_tree(value, path, sel, add_branch, add_leaf, search_term, json_paths)
 
 
 def _count_tree_nodes(value: object) -> int:
@@ -342,26 +419,51 @@ def _count_tree_nodes(value: object) -> int:
 
 # --- Static tree (inline expanded view) ---
 
-def _build_rich_tree(entry: dict, custom_selected: set[str]) -> RichTree:
+def _build_rich_tree(
+    entry: dict, custom_selected: set[str], search_term: str = "",
+    json_paths: set[str] | None = None,
+) -> RichTree:
     tree = RichTree("", guide_style="dim", hide_root=True)
-    _populate_rich_tree(tree, entry, "", custom_selected)
+    _populate_rich_tree(tree, entry, "", custom_selected, search_term, json_paths)
     return tree
 
 
 def _populate_rich_tree(
     node: RichTree, value: object, path: str, custom_selected: set[str],
+    search_term: str = "", json_paths: set[str] | None = None,
 ) -> None:
     def add_branch(label, children_value, child_path, orig_value):
         branch = node.add(label)
-        _populate_rich_tree(branch, children_value, child_path, custom_selected)
+        _populate_rich_tree(branch, children_value, child_path, custom_selected, search_term, json_paths)
 
     def add_leaf(label, child_path, orig_value):
         node.add(label)
 
-    _walk_tree(value, path, custom_selected, add_branch, add_leaf)
+    _walk_tree(value, path, custom_selected, add_branch, add_leaf, search_term, json_paths)
 
 
-def _entry_summary(entry: dict, columns: list[str], col_widths: list[int]) -> Text:
+SEARCH_HIGHLIGHT_STYLE = "on dark_orange3"
+
+
+def _highlight_text(text: Text, term: str) -> Text:
+    """Highlight all case-insensitive occurrences of term in a Text object."""
+    if not term:
+        return text
+    plain = text.plain.lower()
+    term_lower = term.lower()
+    start = 0
+    while True:
+        idx = plain.find(term_lower, start)
+        if idx == -1:
+            break
+        text.stylize(SEARCH_HIGHLIGHT_STYLE, idx, idx + len(term_lower))
+        start = idx + 1
+    return text
+
+
+def _entry_summary(
+    entry: dict, columns: list[str], col_widths: list[int], search_term: str = "",
+) -> Text:
     parts: list[str | tuple[str, str]] = []
     for col, width in zip(columns, col_widths):
         val = _get_nested(entry, col)
@@ -376,7 +478,8 @@ def _entry_summary(entry: dict, columns: list[str], col_widths: list[int]) -> Te
         else:
             parts.append(cell)
         parts.append(" ")
-    return Text.assemble(*parts) if parts else Text("(empty)")
+    text = Text.assemble(*parts) if parts else Text("(empty)")
+    return _highlight_text(text, search_term)
 
 
 def _compute_col_widths(
@@ -726,6 +829,7 @@ HELP_TEXT = """\
   [b]f n[/b]       Has field (AND)
   [b]f N[/b]       Has field (OR)
   [b]s[/b]         Select this field for display
+  [b]v[/b]         View value in $EDITOR
   [b]t[/b]         Toggle: show only selected fields
   [b]Escape[/b]    Return to main view
 """
@@ -841,6 +945,7 @@ class DetailTree(Tree):
         Binding("ctrl+u", "page_up", show=False),
         Binding("s", "add_select", "Add field"),
         Binding("t", "toggle_filter_tree", "Selected only"),
+        Binding("v", "view_value", "View"),
     ]
 
     _LEADER_BINDINGS = [
@@ -935,6 +1040,32 @@ class DetailTree(Tree):
         app: JnavApp = self.app
         app.add_column(node.data["path"])
 
+    def action_view_value(self) -> None:
+        import os
+        import subprocess
+        import tempfile
+        node = self.cursor_node
+        if node is None or node.data is None:
+            return
+        value = node.data["value"]
+        if isinstance(value, (dict, list)):
+            content = json.dumps(value, indent=2, default=str)
+            suffix = ".json"
+        else:
+            content = str(value)
+            suffix = ".txt"
+        editor = os.environ.get("EDITOR", "less")
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=suffix, prefix="jnav_", dir="/tmp/claude",
+            delete=False,
+        ) as f:
+            f.write(content)
+            path = f.name
+        app: JnavApp = self.app
+        with app.suspend():
+            subprocess.run([editor, path])
+        os.unlink(path)
+
 
 # --- Main App ---
 
@@ -983,7 +1114,6 @@ class JnavApp(App):
     }
     #detail-tree {
         width: 40%;
-        max-width: 60;
         padding: 0 0 0 2;
         display: none;
     }
@@ -1028,15 +1158,18 @@ class JnavApp(App):
         state_file: Path | None = None,
     ) -> None:
         super().__init__()
-        self.entries = entries
-        self.all_columns: list[str] = _detect_all_columns(entries)
+        processed = [_preprocess_entry(e) for e in entries]
+        self.entries = [p[0] for p in processed]
+        self._json_paths: list[set[str]] = [p[1] for p in processed]
+        self._original_entries = entries
+        self.all_columns: list[str] = _detect_all_columns(self.entries)
         self.base_columns: list[str] = _default_columns(self.all_columns)
         self.filters: list[dict] = []
         self.custom_columns: list[dict] = []
         self.visible_indices: list[int] = list(range(len(entries)))
         self._current_detail_entry: dict | None = None
         self._current_entry_index: int = 0
-        self._expanded_mode: bool = False
+        self._expanded_mode: bool = True
         self._filters_paused: bool = False
         self._tail_path: str | None = tail_path
         self._tail_offset: int = tail_offset
@@ -1210,8 +1343,8 @@ class JnavApp(App):
             parts.append(filter_text)
         if n_cols:
             parts.append(f"{n_cols} field{'s' if n_cols != 1 else ''}")
-        mode = "Expanded" if self._expanded_mode else "Table"
-        parts.append(mode)
+        if not self._expanded_mode:
+            parts.append("Collapsed")
 
         if self._search_term:
             total = len(self._search_matches)
@@ -1264,9 +1397,13 @@ class JnavApp(App):
         )
         was_empty = len(self.entries) == 0
 
-        self.entries.extend(new_entries)
+        for raw in new_entries:
+            expanded, jp = _preprocess_entry(raw)
+            self.entries.append(expanded)
+            self._json_paths.append(jp)
+            self._original_entries.append(raw)
 
-        for entry in new_entries:
+        for entry in self.entries[len(self.entries) - len(new_entries):]:
             for key in _flatten_keys(entry):
                 if key not in self.all_columns:
                     self.all_columns.append(key)
@@ -1289,7 +1426,7 @@ class JnavApp(App):
         self._current_detail_entry = entry
         tree = self.query_one("#detail-tree", DetailTree)
         tree.clear()
-        sel = self._custom_columns_set()
+        sel = _resolve_selected_paths(self._custom_columns_set(), entry)
 
         idx = self._current_entry_index
         ts_val = None
@@ -1301,13 +1438,14 @@ class JnavApp(App):
         if ts_val:
             label += f" ({_format_timestamp(str(ts_val))})"
 
+        jp = self._json_paths[idx] if idx < len(self._json_paths) else set()
         if tree.show_selected_only:
             tree.root.set_label(f"{label} (selected)")
             filtered = {col: _get_nested(entry, col) for col in self.active_columns}
-            _build_tree(tree.root, filtered, selected=sel)
+            _build_tree(tree.root, filtered, selected=sel, search_term=self._search_term, json_paths=jp)
         else:
             tree.root.set_label(label)
-            _build_tree(tree.root, entry, selected=sel)
+            _build_tree(tree.root, entry, selected=sel, search_term=self._search_term, json_paths=jp)
         tree.root.expand_all()
 
     # --- Log list ---
@@ -1348,17 +1486,20 @@ class JnavApp(App):
         self._update_header(display_cols, col_widths)
 
         lv = self.query_one("#log-list", ListView)
+
         custom = self._custom_columns_set()
+        search = self._search_term
         items: list[LogEntryItem] = []
         target_list_index = 0
         for list_idx, i in enumerate(self.visible_indices):
             entry = self.entries[i]
-            summary = _entry_summary(entry, display_cols, col_widths)
+            jp = self._json_paths[i]
+            summary = _entry_summary(entry, display_cols, col_widths, search)
             if custom:
                 filtered = {col: _get_nested(entry, col) for col in custom}
-                rich_tree = _build_rich_tree(filtered, custom)
+                rich_tree = _build_rich_tree(filtered, custom, search, jp)
             else:
-                rich_tree = _build_rich_tree(entry, custom)
+                rich_tree = RichTree("", hide_root=True)
             items.append(LogEntryItem(
                 i,
                 Static(summary),
@@ -1387,17 +1528,20 @@ class JnavApp(App):
 
         lv = self.query_one("#log-list", ListView)
         custom = self._custom_columns_set()
+        search = self._search_term
+
         for item in lv.query(LogEntryItem):
             entry = self.entries[item.entry_index]
+            jp = self._json_paths[item.entry_index]
             children = list(item.query(Static))
             if len(children) >= 2:
-                summary = _entry_summary(entry, display_cols, col_widths)
+                summary = _entry_summary(entry, display_cols, col_widths, search)
                 children[0].update(summary)
                 if custom:
                     filtered = {col: _get_nested(entry, col) for col in custom}
-                    children[1].update(_build_rich_tree(filtered, custom))
+                    children[1].update(_build_rich_tree(filtered, custom, search, jp))
                 else:
-                    children[1].update(_build_rich_tree(entry, custom))
+                    children[1].update(RichTree("", hide_root=True))
 
     # --- Actions ---
 
@@ -1433,6 +1577,9 @@ class JnavApp(App):
                 self._search_term = term
                 self._recompute_search_matches()
                 self._update_filter_bar()
+                self._refresh_list_content()
+                if self._current_detail_entry:
+                    self._update_detail(self._current_detail_entry)
                 if self._search_matches:
                     self._search_match_pos = 0
                     lv = self.query_one("#log-list", ListView)
@@ -1465,9 +1612,7 @@ class JnavApp(App):
                 lv.index = match_idx
                 self._update_filter_bar()
                 return
-        self._search_match_pos = 0
-        lv.index = self._search_matches[0]
-        self._update_filter_bar()
+        self.notify("No more matches", timeout=1)
 
     def action_search_prev(self) -> None:
         if not self._search_matches:
@@ -1480,9 +1625,7 @@ class JnavApp(App):
                 lv.index = self._search_matches[i]
                 self._update_filter_bar()
                 return
-        self._search_match_pos = len(self._search_matches) - 1
-        lv.index = self._search_matches[-1]
-        self._update_filter_bar()
+        self.notify("No more matches", timeout=1)
 
     def action_text_filter(self) -> None:
         def on_dismiss(term: str | None) -> None:
@@ -1505,15 +1648,13 @@ class JnavApp(App):
         # Compute scroll delta: sum of tree line counts for items above highlighted
         custom = self._custom_columns_set()
         delta = 0
-        for list_idx, vis_idx in enumerate(self.visible_indices):
-            if list_idx >= hi:
-                break
-            entry = self.entries[vis_idx]
-            if custom:
+        if custom:
+            for list_idx, vis_idx in enumerate(self.visible_indices):
+                if list_idx >= hi:
+                    break
+                entry = self.entries[vis_idx]
                 data = {col: _get_nested(entry, col) for col in custom}
-            else:
-                data = entry
-            delta += _count_tree_nodes(data)
+                delta += _count_tree_nodes(data)
 
         # Toggle mode
         self._expanded_mode = not self._expanded_mode
@@ -1572,7 +1713,8 @@ class JnavApp(App):
 
     def action_copy_entry(self) -> None:
         if self._current_detail_entry:
-            text = json.dumps(self._current_detail_entry, indent=2, default=str)
+            original = self._original_entries[self._current_entry_index]
+            text = json.dumps(original, indent=2, default=str)
             self.copy_to_clipboard(text)
             self.notify("Entry copied to clipboard", timeout=2)
 
@@ -1631,6 +1773,14 @@ class JnavApp(App):
         tree = self.query_one("#detail-tree", DetailTree)
         if self.focused == tree:
             self._focus_main()
+        elif self._search_term:
+            self._search_term = ""
+            self._search_matches = []
+            self._search_match_pos = -1
+            self._update_filter_bar()
+            self._refresh_list_content()
+            if self._current_detail_entry:
+                self._update_detail(self._current_detail_entry)
 
     @on(ListView.Highlighted, "#log-list")
     def on_log_highlighted(self, event: ListView.Highlighted) -> None:
