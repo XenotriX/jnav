@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 import click
 from .app import JnavApp
+from .logging import init_logging
 from .parsing import parse_entries
 
 _STATE_DIR = Path.home() / ".local" / "share" / "jnav"
@@ -16,6 +17,8 @@ def _state_file_for(file_path: str) -> Path:
 @click.option("-f", "--filter", "initial_filter", default="", help="Initial jq filter expression")
 def main(file: str | None, initial_filter: str) -> None:
     """Interactive JSON log viewer with jq filtering."""
+    init_logging()
+
     tail_path: str | None = None
     tail_offset: int = 0
 

@@ -8,6 +8,7 @@ dependencies = [
     "textual>=1.0.0",
     "click>=8.1.0",
     "jq>=1.8.0",
+    "python-json-logger>=4.0.0",
 ]
 
 [project.scripts]
