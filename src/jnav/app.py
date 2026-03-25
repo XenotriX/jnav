@@ -2,6 +2,7 @@ import json
 from asyncio import Queue, QueueEmpty
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Literal, override
 
 from rich.text import Text
 from rich.tree import Tree as RichTree
@@ -12,12 +13,13 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, ListItem, ListView, Static
 
 from jnav.column_manager_screen import ColumnManagerScreen, FieldSelector
-from jnav.filter_manager_screen import Filter, FilterManagerScreen
+from jnav.filter_manager_screen import FilterManagerScreen
 from jnav.help_screen import HelpScreen
 from jnav.search_input_screen import SearchInputScreen
 
 from .detail_tree import DetailTree
 from .filtering import (
+    Filter,
     apply_combined_filters,
     flatten_keys,
     get_nested,
@@ -43,9 +45,6 @@ LEVEL_COLORS = {
 TS_KEYS = {"timestamp", "ts", "time"}
 
 
-# --- Pure functions ---
-
-
 def _format_timestamp(value: str) -> str:
     try:
         dt = datetime.fromisoformat(value)
@@ -66,7 +65,7 @@ def _truncate(value: object, width: int = MAX_CELL_WIDTH) -> str:
 
 
 def _entry_summary(
-    entry: dict,
+    entry: dict[str, Any],
     columns: list[str],
     col_widths: list[int],
     search_term: str = "",
@@ -105,7 +104,7 @@ def _text_search_expr(term: str) -> str:
     return f'[.. | strings] | any(ascii_downcase | contains("{escaped}"))'
 
 
-def _entry_matches_search(entry: dict, term_lower: str) -> bool:
+def _entry_matches_search(entry: dict[str, Any], term_lower: str) -> bool:
     def _check(obj: object) -> bool:
         if isinstance(obj, str):
             return term_lower in obj.lower()
@@ -227,9 +226,11 @@ class JnavApp(App[None]):
         self._show_selected_only_on_load: bool = False
         self._load_state()
         if initial_filter:
-            existing = {f["expr"] for f in self.filters}
-            if initial_filter not in existing:
-                self.filters.append({"expr": initial_filter, "enabled": True})
+            self.filters.append({
+                "expr": initial_filter,
+                "enabled": True,
+                "combine": "and",
+            })
 
     @property
     def active_columns(self) -> list[str]:
@@ -240,6 +241,7 @@ class JnavApp(App[None]):
     def _custom_columns_set(self) -> set[str]:
         return {c["path"] for c in self.custom_columns if c["enabled"]}
 
+    @override
     def compose(self) -> ComposeResult:
         yield Header()
         yield FilterBar(id="filter-bar")
@@ -317,12 +319,19 @@ class JnavApp(App[None]):
     # --- Filter / column management ---
 
     def add_filter(
-        self, expr: str, label: str | None = None, combine: str = "and"
+        self,
+        expr: str,
+        label: str | None = None,
+        combine: Literal["and", "or"] = "and",
     ) -> None:
         """Add a new filter. Does not change focus."""
         existing = {f["expr"] for f in self.filters}
         if expr not in existing:
-            entry: dict = {"expr": expr, "enabled": True, "combine": combine}
+            entry: Filter = {
+                "expr": expr,
+                "enabled": True,
+                "combine": combine,
+            }
             if label:
                 entry["label"] = label
             self.filters.append(entry)
@@ -630,7 +639,8 @@ class JnavApp(App[None]):
 
     # --- Actions ---
 
-    def action_quit(self) -> None:
+    @override
+    async def action_quit(self) -> None:
         self._save_state()
         self.workers.cancel_all()
         self.exit()

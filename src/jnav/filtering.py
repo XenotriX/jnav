@@ -1,14 +1,17 @@
 import functools
 import json
 import re
-from typing import Literal, TypedDict
-import jq
 from collections import OrderedDict
+from typing import Any, Literal, NotRequired, TypedDict, cast
+
+import jq
+
 
 class Filter(TypedDict):
     expr: str
     enabled: bool
     combine: Literal["and", "or"]
+    label: NotRequired[str]
 
 
 @functools.lru_cache(maxsize=32)
@@ -18,7 +21,7 @@ def _compile_jq(expression: str):
 
 def apply_jq_filter(
     expression: str,
-    entries: list[dict],
+    entries: list[Filter],
 ) -> tuple[list[int], str | None]:
     try:
         prog = _compile_jq(expression)
@@ -37,7 +40,7 @@ def apply_jq_filter(
 
 def apply_combined_filters(
     filters: list[Filter],
-    entries: list[dict],
+    entries: list[dict[str, Any]],
 ) -> tuple[list[int], str | None]:
     """Apply all enabled filters (AND group unioned with OR group)."""
     enabled = [f for f in filters if f["enabled"]]
@@ -45,7 +48,7 @@ def apply_combined_filters(
         return list(range(len(entries))), None
     and_exprs = [f["expr"] for f in enabled if f.get("combine", "and") == "and"]
     or_exprs = [f["expr"] for f in enabled if f.get("combine") == "or"]
-    parts = []
+    parts: list[str] = []
     if and_exprs:
         parts.append(" and ".join(f"({e})" for e in and_exprs))
     if or_exprs:
@@ -76,9 +79,7 @@ def _is_truthy(value: object) -> bool:
 _PATH_SEGMENT_RE = re.compile(r"([^.\[\]]+)|\[(\d+)\]")
 
 
-
-
-def get_nested(entry: dict, path: str) -> object:
+def get_nested(entry: dict[str, Any], path: str) -> object:
     # Paths with [] (iterator) need jq
     if "[]" in path:
         jq_path = "." + path if not path.startswith(".") else path
@@ -106,11 +107,12 @@ def get_nested(entry: dict, path: str) -> object:
     return obj
 
 
-def flatten_keys(obj: dict, prefix: str = "") -> list[str]:
-    keys = []
+def flatten_keys(obj: dict[str, Any], prefix: str = "") -> list[str]:
+    keys: list[str] = []
     for k, v in obj.items():
         full = f"{prefix}{k}"
         if isinstance(v, dict):
+            v = cast(dict[str, Any], v)
             for sub_k in v:
                 keys.append(f"{full}.{sub_k}")
         else:
@@ -127,8 +129,6 @@ def detect_all_columns(entries: list[dict]) -> list[str]:
     return list(seen)
 
 
-
-
 def jq_value_literal(value: object) -> str:
     if isinstance(value, str):
         return json.dumps(value)
@@ -141,8 +141,6 @@ def jq_value_literal(value: object) -> str:
     return json.dumps(value)
 
 
-
-
 def _jq_path_to_str(parts: list) -> str:
     result = ""
     for p in parts:
@@ -153,7 +151,7 @@ def _jq_path_to_str(parts: list) -> str:
     return result
 
 
-def resolve_selected_paths(columns: set[str], entry: dict) -> set[str]:
+def resolve_selected_paths(columns: set[str], entry: dict[str, Any]) -> set[str]:
     """Expand jq column expressions into concrete paths for a specific entry."""
     result: set[str] = set()
     for col in columns:
@@ -181,5 +179,3 @@ def resolve_selected_paths(columns: set[str], entry: dict) -> set[str]:
         except Exception:
             result.add(col)
     return result
-
-

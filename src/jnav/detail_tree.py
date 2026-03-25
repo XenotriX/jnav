@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 import tempfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from textual.binding import Binding, BindingsMap
 from textual.events import Key
@@ -28,7 +28,14 @@ class DetailTree(Tree[TreeNodeData]):
     _saved_bindings: BindingsMap | None = None
 
     class FilterRequested(Message):
-        def __init__(self, expr: str, combine: str = "and") -> None:
+        expr: str
+        combine: Literal["and", "or"]
+
+        def __init__(
+            self,
+            expr: str,
+            combine: Literal["and", "or"] = "and",
+        ) -> None:
             super().__init__()
             self.expr = expr
             self.combine = combine

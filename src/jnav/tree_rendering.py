@@ -1,7 +1,7 @@
 """Shared tree rendering logic for both the interactive detail panel and inline expanded views."""
 
 from __future__ import annotations
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from rich.text import Text
 from rich.tree import Tree as RichTree
@@ -184,7 +184,7 @@ def count_tree_nodes(value: object) -> int:
 
 
 def build_rich_tree(
-    entry: dict,
+    entry: dict[str, Any],
     custom_selected: set[str],
     search_term: str = "",
     json_paths: set[str] | None = None,
