@@ -2,6 +2,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+from expression import Error, Ok, Result
+
 
 @dataclass
 class ParsedEntry:
@@ -10,19 +12,19 @@ class ParsedEntry:
     expanded_paths: set[str] = field(default_factory=set)
 
 
-def parse_line(line: str) -> dict[str, Any]:
+def parse_line(line: str) -> Result[dict[str, Any], str]:
     """Parse a single line into a JSON object, or return None if invalid."""
     line = line.strip()
     if not line:
-        raise ValueError("Empty line")
+        return Error("Empty line")
     try:
         obj = json.loads(line)
         if isinstance(obj, dict):
-            return cast(dict[str, Any], obj)
+            return Ok(cast(dict[str, Any], obj))
         else:
-            raise ValueError("JSON is not an object")
+            return Error("Not a JSON object")
     except json.JSONDecodeError:
-        raise ValueError("Invalid JSON")
+        return Error("Invalid JSON")
 
 
 def expand_json_strings(

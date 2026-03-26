@@ -1,16 +1,20 @@
 import asyncio
 import hashlib
 import sys
-from asyncio import Queue
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+import aioreactive as rx
 import click
 
+from jnav.filter_provider import FilterProvider
+from jnav.log_model import LogModel
+from jnav.store import Store
+
 from .app import JnavApp
+from .buffer import buffer_time_or_count
 from .logging import init_logging
-from .parsing import ParsedEntry
-from .pipeline import stream_to_queue
+from .parsing import parse_line, preprocess_entry
 from .reading import read_file, read_pipe, setup_stdin_pipe
 
 _STATE_DIR = Path.home() / ".local" / "share" / "jnav"
@@ -31,36 +35,53 @@ def _get_input_iterator(file: str | None) -> AsyncIterator[str] | None:
     return None
 
 
-async def _run(file: str | None, initial_filter: str) -> None:
+async def _run(file: str | None) -> None:
     lines = _get_input_iterator(file)
 
     if lines is None:
         click.echo("Usage: jnav [FILE] or pipe JSONL via stdin", err=True)
         raise SystemExit(1)
 
-    entry_queue: Queue[ParsedEntry] = Queue(maxsize=1000)
-    stream_task = asyncio.create_task(stream_to_queue(lines, entry_queue))
+    filter_provider = FilterProvider()
+    store = Store()
+    model = LogModel(
+        store=store,
+        filter_provider=filter_provider,
+    )
+
+    await model.start()
+
+    entry_stream = rx.from_async_iterable(
+        buffer_time_or_count(
+            rx.pipe(
+                rx.from_async_iterable(lines),
+                rx.map(lambda line: parse_line(line)),
+                rx.filter(lambda result: result.is_ok()),
+                rx.map(lambda entry: preprocess_entry(entry.ok)),
+            ),
+            max_count=100,
+            timeout=0.1,
+        )
+    )
+
+    await entry_stream.subscribe_async(store.append_entries)
 
     state_file = _state_file_for(file) if file else None
     app = JnavApp(
-        entry_queue=entry_queue,
-        initial_filter=initial_filter,
+        model=model,
+        filter_provider=filter_provider,
         state_file=state_file,
     )
     app.title = "jnav"
     await app.run_async()
-    stream_task.cancel()
 
 
 @click.command()
 @click.argument("file", required=False, type=click.Path(exists=True))
-@click.option(
-    "-f", "--filter", "initial_filter", default="", help="Initial jq filter expression"
-)
-def main(file: str | None, initial_filter: str) -> None:
+def main(file: str | None) -> None:
     """Interactive JSON log viewer with jq filtering."""
     init_logging()
-    asyncio.run(_run(file, initial_filter))
+    asyncio.run(_run(file))
 
 
 if __name__ == "__main__":

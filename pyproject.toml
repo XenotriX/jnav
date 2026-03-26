@@ -9,6 +9,7 @@ dependencies = [
     "click>=8.1.0",
     "jq>=1.8.0",
     "python-json-logger>=4.0.0",
+    "aioreactive>=0.20.0",
 ]
 
 [project.scripts]
@@ -24,3 +25,9 @@ reportExplicitAny = false
 reportUnannotatedClassAttribute = false
 reportIncompatibleUnannotatedOverride = true
 reportUnusedCallResult = false
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]
