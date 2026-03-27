@@ -139,10 +139,6 @@ class JnavApp(App[None]):
     #detail-tree {
         width: 40%;
         padding: 0 0 0 2;
-        display: none;
-    }
-    #detail-tree.visible {
-        display: block;
     }
     """
 
@@ -229,10 +225,8 @@ class JnavApp(App[None]):
         if self._expanded_mode:
             self.query_one("#content-area").add_class("expanded-mode")
 
-        if self._detail_visible_on_load:
-            self.query_one("#detail-tree", DetailTree).add_class("visible")
-
         detail_tree = self.query_one("#detail-tree", DetailTree)
+        detail_tree.display = self._detail_visible_on_load
         detail_tree.show_selected_only = self._show_selected_only_on_load
 
         # Defer initial build until after layout so ListView has a real width
@@ -272,7 +266,7 @@ class JnavApp(App[None]):
             "filters_paused": self._model.filtering_enabled is False,
             "search_term": self._search.term,
             "entry_index": self._current_entry_index,
-            "detail_visible": detail.has_class("visible"),
+            "detail_visible": detail.display,
             "show_selected_only": detail.show_selected_only,
         }
         try:
@@ -634,11 +628,11 @@ class JnavApp(App[None]):
 
     def action_toggle_detail(self) -> None:
         detail = self.query_one("#detail-tree", DetailTree)
-        if detail.has_class("visible"):
-            detail.remove_class("visible")
+        if detail.display:
+            detail.display = False
             self._focus_main()
         else:
-            detail.add_class("visible")
+            detail.display = True
 
     def action_inspect(self) -> None:
         """Open detail panel and focus it (Enter key)."""
@@ -646,8 +640,8 @@ class JnavApp(App[None]):
         if self.focused != lv:
             return
         detail = self.query_one("#detail-tree", DetailTree)
-        if not detail.has_class("visible"):
-            detail.add_class("visible")
+        if not detail.display:
+            detail.display = True
         detail.focus()
 
     async def action_reset(self) -> None:
@@ -675,12 +669,12 @@ class JnavApp(App[None]):
 
     def action_focus_list(self) -> None:
         detail = self.query_one("#detail-tree", DetailTree)
-        if detail.has_class("visible"):
+        if detail.display:
             self.query_one("#log-list", ListView).focus()
 
     def action_focus_detail(self) -> None:
         detail = self.query_one("#detail-tree", DetailTree)
-        if detail.has_class("visible"):
+        if detail.display:
             detail.focus()
 
     def action_scroll_half_down(self) -> None:
