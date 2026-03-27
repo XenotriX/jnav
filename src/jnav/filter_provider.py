@@ -30,11 +30,31 @@ class FilterProvider:
             self._filters.append(entry)
             await self.on_change.asend(None)
 
-    def clear_filters(self) -> None:
+    async def toggle_filter(self, index: int) -> None:
+        self._filters[index]["enabled"] = not self._filters[index]["enabled"]
+        await self.on_change.asend(None)
+
+    async def toggle_combine(self, index: int) -> None:
+        current = self._filters[index].get("combine", "and")
+        self._filters[index]["combine"] = "or" if current == "and" else "and"
+        await self.on_change.asend(None)
+
+    async def remove_filter(self, index: int) -> None:
+        self._filters.pop(index)
+        await self.on_change.asend(None)
+
+    async def edit_filter(self, index: int, expr: str) -> None:
+        self._filters[index]["expr"] = expr
+        self._filters[index].pop("label", None)
+        await self.on_change.asend(None)
+
+    async def clear_filters(self) -> None:
         self._filters.clear()
+        await self.on_change.asend(None)
 
     def get_filters(self) -> list[Filter]:
-        return self._filters
+        return list(self._filters)
 
-    def set_filters(self, filters: list[Filter]) -> None:
-        self._filters = filters
+    async def set_filters(self, filters: list[Filter]) -> None:
+        self._filters = list(filters)
+        await self.on_change.asend(None)

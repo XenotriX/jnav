@@ -1,6 +1,7 @@
 """Shared tree rendering logic for both the interactive detail panel and inline expanded views."""
 
 from __future__ import annotations
+
 from typing import Any, TypedDict
 
 from rich.text import Text
@@ -137,8 +138,6 @@ def walk_tree(
                 add_leaf(_hl(index_label(i, item)), child_path, item)
 
 
-# --- Interactive tree (detail panel) ---
-
 class TreeNodeData(TypedDict):
     path: str
     value: object
@@ -178,9 +177,6 @@ def count_tree_nodes(value: object) -> int:
 
     walk_tree(value, "", set(), add_branch, add_leaf)
     return count
-
-
-# --- Static tree (inline expanded view) ---
 
 
 def build_rich_tree(

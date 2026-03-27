@@ -1,4 +1,4 @@
-from typing import Literal, TypedDict, override
+from typing import override
 
 from rich.text import Text
 from textual import on
@@ -9,12 +9,12 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, OptionList, Static
 from textual.widgets.option_list import Option
 
-from jnav.filtering import Filter, check_filter_warning
+from jnav.filter_provider import FilterProvider
+from jnav.filtering import check_filter_warning
 from jnav.manager_screen_common import list_option_prompt
 
 
 class FilterManagerScreen(ModalScreen[bool]):
-    filters: list[Filter]
     DEFAULT_CSS = """
     FilterManagerScreen {
         align: center middle;
@@ -58,9 +58,9 @@ class FilterManagerScreen(ModalScreen[bool]):
         Binding("o", "toggle_combine", "AND/OR", show=False),
     ]
 
-    def __init__(self, filters: list[Filter]) -> None:
+    def __init__(self, filter_provider: FilterProvider) -> None:
         super().__init__()
-        self.filters = filters
+        self._fp = filter_provider
         self._editing_idx: int | None = None
 
     @override
@@ -83,12 +83,13 @@ class FilterManagerScreen(ModalScreen[bool]):
         self.query_one("#filter-list", OptionList).focus()
 
     def _refresh_list(self, highlight: int | None = None) -> None:
+        filters = self._fp.get_filters()
         ol = self.query_one("#filter-list", OptionList)
         ol.clear_options()
-        if not self.filters:
+        if not filters:
             ol.add_option(Option(Text(" (no filters)", style="dim"), disabled=True))
         else:
-            for f in self.filters:
+            for f in filters:
                 ol.add_option(
                     list_option_prompt(
                         f.get("label") or f["expr"],
@@ -96,29 +97,28 @@ class FilterManagerScreen(ModalScreen[bool]):
                         f["combine"],
                     )
                 )
-        if highlight is not None and self.filters:
-            ol.highlighted = min(highlight, len(self.filters) - 1)
+        if highlight is not None and filters:
+            ol.highlighted = min(highlight, len(filters) - 1)
 
-    def action_toggle_item(self) -> None:
+    async def action_toggle_item(self) -> None:
         ol = self.query_one("#filter-list", OptionList)
         idx = ol.highlighted
-        if idx is not None and idx < len(self.filters):
-            self.filters[idx]["enabled"] = not self.filters[idx]["enabled"]
+        if idx is not None and idx < len(self._fp.get_filters()):
+            await self._fp.toggle_filter(idx)
             self._refresh_list(idx)
 
-    def action_toggle_combine(self) -> None:
+    async def action_toggle_combine(self) -> None:
         ol = self.query_one("#filter-list", OptionList)
         idx = ol.highlighted
-        if idx is not None and idx < len(self.filters):
-            current = self.filters[idx].get("combine", "and")
-            self.filters[idx]["combine"] = "or" if current == "and" else "and"
+        if idx is not None and idx < len(self._fp.get_filters()):
+            await self._fp.toggle_combine(idx)
             self._refresh_list(idx)
 
-    def action_delete(self) -> None:
+    async def action_delete(self) -> None:
         ol = self.query_one("#filter-list", OptionList)
         idx = ol.highlighted
-        if idx is not None and idx < len(self.filters):
-            self.filters.pop(idx)
+        if idx is not None and idx < len(self._fp.get_filters()):
+            await self._fp.remove_filter(idx)
             self._refresh_list(idx)
 
     def action_add_mode(self) -> None:
@@ -131,26 +131,26 @@ class FilterManagerScreen(ModalScreen[bool]):
     def action_edit_mode(self) -> None:
         ol = self.query_one("#filter-list", OptionList)
         idx = ol.highlighted
-        if idx is None or idx >= len(self.filters):
+        filters = self._fp.get_filters()
+        if idx is None or idx >= len(filters):
             return
         self._editing_idx = idx
         inp = self.query_one("#filter-add-input", Input)
         inp.remove_class("hidden")
-        inp.value = self.filters[idx]["expr"]
+        inp.value = filters[idx]["expr"]
         inp.focus()
 
     @on(Input.Submitted, "#filter-add-input")
-    def on_add_submitted(self, event: Input.Submitted) -> None:
+    async def on_add_submitted(self, event: Input.Submitted) -> None:
         expr = event.value.strip()
         if expr:
             warning = check_filter_warning(expr)
             if self._editing_idx is not None:
-                self.filters[self._editing_idx]["expr"] = expr
-                self.filters[self._editing_idx].pop("label", None)
+                await self._fp.edit_filter(self._editing_idx, expr)
                 highlight = self._editing_idx
             else:
-                self.filters.append({"expr": expr, "enabled": True, "combine": "and"})
-                highlight = len(self.filters) - 1
+                await self._fp.add_filter(expr)
+                highlight = len(self._fp.get_filters()) - 1
             if warning:
                 self.notify(warning, severity="warning", timeout=3)
         else:

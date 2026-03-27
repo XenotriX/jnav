@@ -21,13 +21,13 @@ def _compile_jq(expression: str):
 
 def apply_jq_filter(
     expression: str,
-    entries: list[Filter],
+    entries: list[dict[str, Any]],
 ) -> tuple[list[int], str | None]:
     try:
         prog = _compile_jq(expression)
     except ValueError as e:
         return [], str(e)
-    matched = []
+    matched: list[int] = []
     for i, entry in enumerate(entries):
         try:
             results = prog.input_value(entry).all()

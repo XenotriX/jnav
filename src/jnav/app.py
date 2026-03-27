@@ -18,14 +18,10 @@ from jnav.filter_provider import FilterProvider
 from jnav.help_screen import HelpScreen
 from jnav.log_model import LogModel
 from jnav.search_input_screen import SearchInputScreen
+from jnav.store import IndexedEntry
 
 from .detail_tree import DetailTree
-from .filtering import (
-    apply_combined_filters,
-    flatten_keys,
-    get_nested,
-    resolve_selected_paths,
-)
+from .filtering import flatten_keys, get_nested, resolve_selected_paths
 from .parsing import ParsedEntry
 from .tree_rendering import build_rich_tree, count_tree_nodes, highlight_text
 
@@ -213,12 +209,10 @@ class JnavApp(App[None]):
         self.base_columns: list[str] = []
         self._filter_provider: FilterProvider = filter_provider
         self.custom_columns: list[FieldSelector] = []
-        self.visible_indices: list[int] = []
         self._cached_col_widths: dict[str, int] = {}
         self._current_detail_entry: ParsedEntry | None = None
         self._current_entry_index: int = 0
         self._expanded_mode: bool = True
-        self._filters_paused: bool = False
         self._follow_next_rebuild: bool = False
         self._search_term: str = ""
         self._search_matches: list[int] = []
@@ -226,7 +220,6 @@ class JnavApp(App[None]):
         self._state_file: Path | None = state_file
         self._detail_visible_on_load: bool = False
         self._show_selected_only_on_load: bool = False
-        self._load_state()
 
     @property
     def active_columns(self) -> list[str]:
@@ -252,8 +245,10 @@ class JnavApp(App[None]):
         yield Footer()
 
     async def on_mount(self) -> None:
+        await self._load_state()
+
         await self._model.on_append.subscribe_async(self._append_entries)
-        await self._filter_provider.on_change.subscribe_async(self.on_filter_added)
+        await self._model.on_rebuild.subscribe_async(self._on_rebuild)
 
         lv = self.query_one("#log-list", ListView)
         lv.focus()
@@ -271,27 +266,23 @@ class JnavApp(App[None]):
         self.call_after_refresh(self._initial_build)
 
     async def _initial_build(self) -> None:
-        # Append all existing entries
-        if not self._model.is_empty():
-            await self._append_entries(self._model.all())
-        self._update_filter_bar()
+        self._discover_columns(self._model.all())
+        await self._on_rebuild(None)
 
     def on_resize(self) -> None:
         self._refresh_list_content()
 
-    # --- State persistence ---
-
-    def _load_state(self) -> None:
+    async def _load_state(self) -> None:
         if not self._state_file or not self._state_file.exists():
             return
         try:
             state = json.loads(self._state_file.read_text())
         except json.JSONDecodeError, OSError:
             return
-        self._filter_provider.set_filters(state.get("filters", []))
+        await self._filter_provider.set_filters(state.get("filters", []))
         self.custom_columns = state.get("custom_columns", [])
         self._expanded_mode = state.get("expanded_mode", False)
-        self._filters_paused = state.get("filters_paused", False)
+        await self._model.set_filtering_enabled(not state.get("filters_paused", False))
         self._search_term = state.get("search_term", "")
         self._current_entry_index = state.get("entry_index", 0)
         self._detail_visible_on_load = state.get("detail_visible", False)
@@ -305,7 +296,7 @@ class JnavApp(App[None]):
             "filters": self._filter_provider.get_filters(),
             "custom_columns": self.custom_columns,
             "expanded_mode": self._expanded_mode,
-            "filters_paused": self._filters_paused,
+            "filters_paused": self._model.filtering_enabled is False,
             "search_term": self._search_term,
             "entry_index": self._current_entry_index,
             "detail_visible": detail.has_class("visible"),
@@ -317,8 +308,9 @@ class JnavApp(App[None]):
         except OSError:
             pass
 
-    async def on_filter_added(self, _: None) -> None:
-        await self._apply_all_filters()
+    async def _on_rebuild(self, _: None) -> None:
+        await self._rebuild_list()
+        self._recompute_search_matches()
         self._update_filter_bar()
 
     def add_column(self, path: str) -> None:
@@ -338,38 +330,25 @@ class JnavApp(App[None]):
                 self._update_detail(self._current_detail_entry)
             self._update_filter_bar()
 
-    async def _apply_all_filters(self) -> None:
-        if self._filters_paused:
-            self.visible_indices = list(range(self._model.count()))
-            await self._rebuild_list()
-            self._recompute_search_matches()
-            return
-        matched, error = apply_combined_filters(
-            filters=self._filter_provider.get_filters(),
-            entries=[e.expanded for e in self._model.all()],
-        )
-        if error:
-            self.notify(f"Filter error: {error}", severity="error", timeout=4)
-            return
-        self.visible_indices = matched
-        await self._rebuild_list()
-        self._recompute_search_matches()
-
     def _update_filter_bar(self) -> None:
         bar = self.query_one("#filter-bar", FilterBar)
         total = self._model.count()
-        shown = len(self.visible_indices)
+        shown = len(self._model.visible_indices)
         n_filters = sum(1 for f in self._filter_provider.get_filters() if f["enabled"])
         n_cols = sum(1 for c in self.custom_columns if c["enabled"])
 
-        n_or = sum(1 for f in self._filter_provider.get_filters() if f["enabled"] and f.get("combine") == "or")
+        n_or = sum(
+            1
+            for f in self._filter_provider.get_filters()
+            if f["enabled"] and f.get("combine") == "or"
+        )
 
         parts: list[str] = [f"Showing {shown}/{total}"]
         if n_filters:
             filter_text = f"{n_filters} filter{'s' if n_filters != 1 else ''}"
             if n_or:
                 filter_text += f" ({n_or} OR)"
-            if self._filters_paused:
+            if not self._model.filtering_enabled:
                 filter_text += " PAUSED"
             parts.append(filter_text)
         if n_cols:
@@ -391,45 +370,32 @@ class JnavApp(App[None]):
 
         bar.update("  \u2502  ".join(parts))
 
-    async def _append_entries(self, new_entries: list[ParsedEntry]) -> None:
-        lv = self.query_one("#log-list", ListView)
-        was_at_bottom = (
-            lv.index is not None
-            and len(self.visible_indices) > 0
-            and lv.index >= len(self.visible_indices) - 1
-        )
-        start = self._model.count() - len(new_entries)
-        was_empty = start == 0
-
-        for parsed in new_entries:
-            for key in flatten_keys(parsed.expanded):
+    def _discover_columns(self, entries: list[IndexedEntry]) -> None:
+        was_empty = not self.all_columns
+        for ie in entries:
+            for key in flatten_keys(ie.entry.expanded):
                 if key not in self._all_columns_set:
                     self._all_columns_set.add(key)
                     self.all_columns.append(key)
-
-        if was_empty:
+        if was_empty and self.all_columns:
             self.base_columns = _default_columns(self.all_columns)
-        if (
-            self._filter_provider.get_filters()
-            and any(f["enabled"] for f in self._filter_provider.get_filters())
-            and not self._filters_paused
-        ):
-            matched, error = apply_combined_filters(
-                self._filter_provider.get_filters(),
-                [e.expanded for e in self._model.all()[start:]],
-            )
-            if error:
-                new_visible = list(range(start, self._model.count()))
-            else:
-                new_visible = [start + i for i in matched]
-        else:
-            new_visible = list(range(start, self._model.count()))
+
+    async def _append_entries(self, new_entries: list[IndexedEntry]) -> None:
+        lv = self.query_one("#log-list", ListView)
+        was_at_bottom = (
+            lv.index is not None
+            and len(self._model.visible_indices) > 0
+            and lv.index >= len(self._model.visible_indices) - 1
+        )
+        was_empty = len(lv) == 0
+
+        self._discover_columns(new_entries)
+
+        new_visible = [ie.index for ie in new_entries]
 
         if not new_visible:
             self._update_filter_bar()
             return
-
-        self.visible_indices.extend(new_visible)
 
         display_cols = self.base_columns if self._expanded_mode else self.active_columns
         self._update_cached_col_widths(new_visible)
@@ -458,14 +424,13 @@ class JnavApp(App[None]):
                 )
 
         if was_at_bottom:
-            # Scroll to bottom without triggering a detail tree rebuild
             with self.prevent(ListView.Highlighted):
-                lv.index = len(self.visible_indices) - 1
+                lv.index = len(self._model.visible_indices) - 1
 
         self._update_filter_bar()
 
-        if was_empty:
-            self._update_detail(self._model.get(0))
+        if was_empty and new_visible:
+            self._update_detail(self._model.get(new_visible[0]))
 
     def _update_detail(self, parsed: ParsedEntry) -> None:
         self._current_detail_entry = parsed
@@ -546,7 +511,7 @@ class JnavApp(App[None]):
         search = self._search_term
         items: list[LogEntryItem] = []
         target_list_index = 0
-        for list_idx, i in enumerate(self.visible_indices):
+        for list_idx, i in enumerate(self._model.visible_indices):
             parsed = self._model.get(i)
             summary = _entry_summary(parsed.expanded, display_cols, col_widths, search)
             if custom:
@@ -617,19 +582,17 @@ class JnavApp(App[None]):
         self.query_one("#log-list", ListView).focus()
 
     def action_open_filters(self) -> None:
-        async def on_dismiss(result: object) -> None:
-            await self._apply_all_filters()
-            self._update_filter_bar()
+        def on_dismiss(result: object) -> None:
+            del result  # unused
             if self._current_detail_entry:
                 self._update_detail(self._current_detail_entry)
 
-        self.push_screen(
-            FilterManagerScreen(self._filter_provider.get_filters()), on_dismiss
-        )
+        self.push_screen(FilterManagerScreen(self._filter_provider), on_dismiss)
 
     def action_open_columns(self) -> None:
-        def on_dismiss(result: object) -> None:
-            self._rebuild_list()
+        async def on_dismiss(result: object) -> None:
+            del result  # unused
+            await self._rebuild_list()
             self._update_filter_bar()
             if self._current_detail_entry:
                 self._update_detail(self._current_detail_entry)
@@ -665,7 +628,7 @@ class JnavApp(App[None]):
         term_lower = self._search_term.lower()
         self._search_matches = [
             list_idx
-            for list_idx, entry_idx in enumerate(self.visible_indices)
+            for list_idx, entry_idx in enumerate(self._model.visible_indices)
             if _entry_matches_search(self._model.get(entry_idx).expanded, term_lower)
         ]
         self._search_match_pos = -1
@@ -722,7 +685,7 @@ class JnavApp(App[None]):
         custom = self._custom_columns_set()
         delta = 0
         if custom:
-            for list_idx, vis_idx in enumerate(self.visible_indices):
+            for list_idx, vis_idx in enumerate(self._model.visible_indices):
                 if list_idx >= hi:
                     break
                 parsed = self._model.get(vis_idx)
@@ -774,13 +737,11 @@ class JnavApp(App[None]):
         detail.focus()
 
     async def action_reset(self) -> None:
-        self._filter_provider.clear_filters()
         self.custom_columns.clear()
         self._search_term = ""
         self._search_matches = []
         self._search_match_pos = -1
-        await self._apply_all_filters()
-        self._update_filter_bar()
+        await self._filter_provider.clear_filters()
         if self._current_detail_entry:
             self._update_detail(self._current_detail_entry)
         self.notify("Filters and fields cleared", timeout=2)
@@ -794,7 +755,7 @@ class JnavApp(App[None]):
 
     def action_cursor_down(self) -> None:
         lv = self.query_one("#log-list", ListView)
-        if lv.index is not None and lv.index < len(self.visible_indices) - 1:
+        if lv.index is not None and lv.index < len(self._model.visible_indices) - 1:
             lv.index += 1
 
     def action_cursor_up(self) -> None:
@@ -815,7 +776,7 @@ class JnavApp(App[None]):
     def action_scroll_half_down(self) -> None:
         lv = self.query_one("#log-list", ListView)
         half = max(1, lv.size.height // 2)
-        max_idx = len(self.visible_indices) - 1
+        max_idx = len(self._model.visible_indices) - 1
         if lv.index is not None:
             lv.index = min(lv.index + half, max_idx)
 
@@ -828,17 +789,17 @@ class JnavApp(App[None]):
     async def action_toggle_filters_pause(self) -> None:
         if not self._filter_provider.get_filters():
             return
-        self._filters_paused = not self._filters_paused
-        await self._apply_all_filters()
-        self._update_filter_bar()
-        state = "paused" if self._filters_paused else "active"
+        await self._model.set_filtering_enabled(not self._model.filtering_enabled)
+        state = "active" if self._model.filtering_enabled else "paused"
         self.notify(f"Filters {state}", timeout=2)
 
     def action_jump_top(self) -> None:
         self.query_one("#log-list", ListView).index = 0
 
     def action_jump_bottom(self) -> None:
-        self.query_one("#log-list", ListView).index = len(self.visible_indices) - 1
+        self.query_one("#log-list", ListView).index = (
+            len(self._model.visible_indices) - 1
+        )
 
     def action_show_help(self) -> None:
         self.push_screen(HelpScreen())
@@ -864,6 +825,7 @@ class JnavApp(App[None]):
 
     @on(ListView.Selected, "#log-list")
     def on_log_selected(self, event: ListView.Selected) -> None:
+        del event  # unused
         self.action_inspect()
 
     @on(DetailTree.FilterRequested)
@@ -879,5 +841,6 @@ class JnavApp(App[None]):
 
     @on(DetailTree.SelectedOnlyToggled)
     def on_selected_only_toggled(self, event: DetailTree.SelectedOnlyToggled) -> None:
+        del event  # unused
         if self._current_detail_entry is not None:
             self._update_detail(self._current_detail_entry)
