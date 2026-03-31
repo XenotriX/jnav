@@ -6,7 +6,7 @@ from typing import override
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.widgets import Footer, Header, ListView, Static
 
 from jnav.field_manager import FieldManager
@@ -20,7 +20,8 @@ from jnav.search_input_screen import SearchInputScreen
 
 from .detail_tree import DetailTree
 from .filtering import text_search_expr
-from .log_list_view import LogEntryItem, LogListView
+from .log_entry_item import LogEntryItem
+from .log_list_view import LogListView
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +39,6 @@ class JnavApp(App[None]):
     }
     #content-area {
         height: 1fr;
-    }
-    #log-header {
-        height: 1;
-        padding: 0 1;
-        text-style: bold;
-        color: $text-muted;
     }
     #detail-tree {
         width: 40%;
@@ -95,14 +90,11 @@ class JnavApp(App[None]):
         yield Header()
         yield FilterBar(id="filter-bar")
         yield Horizontal(
-            Vertical(
-                Static("", id="log-header"),
-                LogListView(
-                    model=self._model,
-                    fields=self._fields,
-                    search=self._search,
-                    id="log-list",
-                ),
+            LogListView(
+                model=self._model,
+                fields=self._fields,
+                search=self._search,
+                id="log-list",
             ),
             DetailTree(
                 "entry",
@@ -123,7 +115,6 @@ class JnavApp(App[None]):
         await self._search.on_change.subscribe_async(self._on_search_changed)
 
         lv = self.query_one("#log-list", LogListView)
-        lv.set_header(self.query_one("#log-header", Static))
         lv.set_expanded_mode(self._expanded_mode)
         lv.focus()
 

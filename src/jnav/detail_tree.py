@@ -4,18 +4,53 @@ import json
 import os
 import subprocess
 import tempfile
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal, TypedDict
 
+from rich.text import Text
 from textual.binding import Binding, BindingsMap
 from textual.events import Key
 from textual.widgets import Tree
+from textual.widgets.tree import TreeNode
 
 from .field_manager import FieldManager
 from .filter_provider import FilterProvider
 from .filtering import get_nested, jq_value_literal, resolve_selected_paths
 from .parsing import ParsedEntry
 from .search_engine import SearchEngine
-from .tree_rendering import TreeNodeData, build_tree
+from .tree_rendering import walk_tree
+
+
+class TreeNodeData(TypedDict):
+    path: str
+    value: object
+
+
+def _build_tree(
+    node: TreeNode[TreeNodeData],
+    value: object,
+    path: str = "",
+    selected: set[str] | None = None,
+    search_term: str = "",
+    json_paths: set[str] | None = None,
+) -> None:
+    sel = selected or set()
+
+    def add_branch(label: Text, children_value: object, child_path: str, orig_value: object) -> None:
+        branch = node.add(label, data={"path": child_path, "value": orig_value})
+        _build_tree(branch, children_value, child_path, sel, search_term, json_paths)
+
+    def add_leaf(label: Text, child_path: str, orig_value: object) -> None:
+        node.add_leaf(label, data={"path": child_path, "value": orig_value})
+
+    walk_tree(
+        value=value,
+        path=path,
+        selected=sel,
+        add_branch=add_branch,
+        add_leaf=add_leaf,
+        search_term=search_term,
+        json_paths=json_paths,
+    )
 
 if TYPE_CHECKING:
     from textual import getters
@@ -80,12 +115,12 @@ class DetailTree(Tree[TreeNodeData]):
         self._filters = filters
         self._search = search
 
-    async def on_mount(self) -> None:
+    async def on_mount(self) -> None:  # pyright: ignore[reportIncompatibleMethodOverride, reportImplicitOverride]
         await self._fields.on_change.subscribe_async(self._rerender)
         await self._search.on_change.subscribe_async(self._rerender)
 
     async def _rerender(self, _: None) -> None:
-        self._render()
+        self._rebuild_tree()
 
     @property
     def entry(self) -> ParsedEntry | None:
@@ -94,9 +129,9 @@ class DetailTree(Tree[TreeNodeData]):
     def show_entry(self, parsed: ParsedEntry, index: int) -> None:
         self._entry = parsed
         self._entry_index = index
-        self._render()
+        self._rebuild_tree()
 
-    def _render(self) -> None:
+    def _rebuild_tree(self) -> None:
         if self._entry is None:
             return
         entry = self._entry.expanded
@@ -115,7 +150,7 @@ class DetailTree(Tree[TreeNodeData]):
         if self.show_selected_only:
             self.root.set_label(f"{label} (selected)")
             filtered = {col: get_nested(entry, col) for col in self._fields.active_fields}
-            build_tree(
+            _build_tree(
                 self.root,
                 filtered,
                 selected=selected,
@@ -124,7 +159,7 @@ class DetailTree(Tree[TreeNodeData]):
             )
         else:
             self.root.set_label(label)
-            build_tree(
+            _build_tree(
                 self.root,
                 entry,
                 selected=selected,
@@ -183,7 +218,7 @@ class DetailTree(Tree[TreeNodeData]):
 
     def action_toggle_filter_tree(self) -> None:
         self.show_selected_only = not self.show_selected_only
-        self._render()
+        self._rebuild_tree()
 
     async def _do_filter(self, combine: Literal["and", "or"]) -> None:
         node = self.cursor_node
