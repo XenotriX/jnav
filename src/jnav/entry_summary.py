@@ -2,14 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from rich.style import Style
 from rich.text import Text
 from textual.widgets import Static
 
+if TYPE_CHECKING:
+    from textual import getters
+    from textual.app import App
+
 from .filtering import get_nested
 from .parsing import ParsedEntry
+from .search_engine import SearchEngine
 from .tree_rendering import highlight_text
 
 MAX_CELL_WIDTH = 50
@@ -58,6 +63,9 @@ class Column:
 
 
 class EntrySummary(Static):
+    if TYPE_CHECKING:
+        app = getters.app(App[None])
+
     COMPONENT_CLASSES = {
         "summary--level-error",
         "summary--level-warning",
@@ -78,9 +86,10 @@ class EntrySummary(Static):
     }
     """
 
-    def __init__(self) -> None:
+    def __init__(self, parsed: ParsedEntry, search: SearchEngine) -> None:
         super().__init__()
-        self._parsed: ParsedEntry | None = None
+        self._parsed = parsed
+        self._search = search
         self.columns: list[Column] = [
             Column(
                 key="ts",
@@ -96,8 +105,10 @@ class EntrySummary(Static):
             ),
         ]
 
-    def set_entry(self, parsed: ParsedEntry) -> None:
-        self._parsed = parsed
+    async def on_mount(self) -> None:
+        await self._search.on_change.subscribe_async(self._on_change)
+        self.app.theme_changed_signal.subscribe(self, lambda _: self._render_summary())
+        self._render_summary()
 
     def format_default(self, value: str) -> tuple[str, Style]:
         text_style = self.get_component_rich_style("summary--text", partial=True)
@@ -121,13 +132,10 @@ class EntrySummary(Static):
         else:
             return self.format_default(s)
 
-    def refresh_content(
-        self,
-        search: str,
-    ) -> None:
-        if self._parsed is None:
-            return
+    async def _on_change(self, _: None) -> None:
+        self._render_summary()
 
+    def _render_summary(self) -> None:
         parts: list[str | tuple[str, str | Style]] = []
         for col in self.columns:
             val = get_nested(self._parsed.expanded, col.key)
@@ -136,4 +144,4 @@ class EntrySummary(Static):
             parts.append(formatted)
             parts.append(" ")
         text = Text.assemble(*parts) if parts else Text("(empty)")
-        self.update(highlight_text(text, search))
+        self.update(highlight_text(text, self._search.term))

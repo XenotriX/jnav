@@ -6,33 +6,30 @@ from textual.app import ComposeResult
 from textual.widgets import ListItem
 
 from .entry_summary import EntrySummary
+from .field_manager import FieldManager
 from .inline_tree import InlineTree
+from .search_engine import SearchEngine
 from .store import IndexedEntry
 
 
 class LogEntryItem(ListItem):
-    def __init__(self, entry: IndexedEntry) -> None:
+    def __init__(
+        self,
+        *,
+        entry: IndexedEntry,
+        fields: FieldManager,
+        search: SearchEngine,
+    ) -> None:
         super().__init__()
         self.entry_index = entry.index
-        self._summary = EntrySummary()
-        self._summary.set_entry(entry.entry)
-        self._inline_tree = InlineTree()
-        self._inline_tree.set_entry(entry.entry)
+        self._summary = EntrySummary(entry.entry, search)
+        self._inline_tree = InlineTree(
+            parsed=entry.entry,
+            fields=fields,
+            search=search,
+        )
 
     @override
     def compose(self) -> ComposeResult:
         yield self._summary
         yield self._inline_tree
-
-    def refresh_content(
-        self,
-        custom: set[str],
-        search: str,
-        expanded: bool,
-    ) -> None:
-        self._summary.refresh_content(search)
-        if custom and expanded:
-            self._inline_tree.refresh_content(custom, search)
-            self._inline_tree.display = True
-        else:
-            self._inline_tree.display = False

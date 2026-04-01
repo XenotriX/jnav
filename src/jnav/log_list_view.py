@@ -19,25 +19,46 @@ class _CountVisitor:
     def __init__(self) -> None:
         self.count = 0
 
-    def enter_property(self, key: str, value: dict[str, Any] | list[object], path: str, from_json: bool) -> None:
+    def enter_property(
+        self,
+        key: str,
+        value: dict[str, Any] | list[object],
+        path: str,
+        from_json: bool,
+    ) -> None:
         del key, value, path, from_json  # unused
         self.count += 1
 
     def exit_property(self) -> None:
         pass
 
-    def on_property(self, key: str, value: object, path: str) -> None:
+    def on_property(
+        self,
+        key: str,
+        value: object,
+        path: str,
+    ) -> None:
         del key, value, path  # unused
         self.count += 1
 
-    def enter_item(self, index: int, value: dict[str, Any] | list[object], path: str) -> None:
+    def enter_item(
+        self,
+        index: int,
+        value: dict[str, Any] | list[object],
+        path: str,
+    ) -> None:
         del index, value, path  # unused
         self.count += 1
 
     def exit_item(self) -> None:
         pass
 
-    def on_item(self, index: int, value: object, path: str) -> None:
+    def on_item(
+        self,
+        index: int,
+        value: object,
+        path: str,
+    ) -> None:
         del index, value, path  # unused
         self.count += 1
 
@@ -85,7 +106,7 @@ class LogListView(ListView):
     LogListView LogEntryItem.-highlight > InlineTree {
         background: #242c38;
     }
-    LogListView.expanded-mode InlineTree {
+    LogListView.expanded-mode InlineTree.has-content {
         display: block;
     }
     """
@@ -110,8 +131,6 @@ class LogListView(ListView):
     async def on_mount(self) -> None:
         await self._model.on_append.subscribe_async(self._on_append)
         await self._model.on_rebuild.subscribe_async(self._on_rebuild)
-        await self._fields.on_change.subscribe_async(self._on_refresh)
-        await self._search.on_change.subscribe_async(self._on_refresh)
 
     def on_focus(self) -> None:
         for w in self._chrome:
@@ -138,7 +157,6 @@ class LogListView(ListView):
             self.remove_class("expanded-mode")
             new_y = max(0, self.scroll_y - delta)
 
-        self._refresh_content()
         self.set_scroll(None, new_y)
 
         def _fix_scroll() -> None:
@@ -197,9 +215,7 @@ class LogListView(ListView):
 
         with self.app.batch_update():
             for ie in new_entries:
-                self.append(LogEntryItem(ie))
-
-        self.call_after_refresh(self._refresh_content)
+                self.append(LogEntryItem(entry=ie, fields=self._fields, search=self._search))
 
         if was_at_bottom:
             with self.prevent(ListView.Highlighted):
@@ -211,15 +227,12 @@ class LogListView(ListView):
     async def _on_rebuild(self, _: None) -> None:
         self._rebuild()
 
-    async def _on_refresh(self, _: None) -> None:
-        self._refresh_content()
-
     def _rebuild(self) -> None:
         items: list[LogEntryItem] = []
         target_list_index = 0
         for list_idx, i in enumerate(self._model.visible_indices):
             ie = IndexedEntry(i, self._model.get(i))
-            items.append(LogEntryItem(ie))
+            items.append(LogEntryItem(entry=ie, fields=self._fields, search=self._search))
             if i == self._current_index:
                 target_list_index = list_idx
 
@@ -234,16 +247,8 @@ class LogListView(ListView):
 
         def _after_rebuild() -> None:
             self.index = target_list_index
-            self._refresh_content()
 
         self.call_after_refresh(_after_rebuild)
-
-    def _refresh_content(self) -> None:
-        custom = self._fields.custom_fields_set
-        search = self._search.term
-
-        for item in self.query(LogEntryItem):
-            item.refresh_content(custom, search, self._expanded_mode)
 
     def _visible_count(self) -> int:
         return len(self._model.visible_indices)

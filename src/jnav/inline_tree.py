@@ -1,29 +1,46 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from rich.text import Text
 from rich.tree import Tree as RichTree
 from textual.widgets import Static
 
+if TYPE_CHECKING:
+    from textual import getters
+    from textual.app import App
+
+from .field_manager import FieldManager
 from .filtering import get_nested
 from .parsing import ParsedEntry
+from .search_engine import SearchEngine
 from .tree_rendering import TreeBuildVisitor, walk_tree
 
 
 def _add_branch(
-    parent: RichTree, label: Text, path: str, value: object
+    parent: RichTree,
+    label: Text,
+    path: str,
+    value: object,
 ) -> RichTree:
     del path, value  # unused
     return parent.add(label)
 
 
 def _add_leaf(
-    parent: RichTree, label: Text, path: str, value: object
+    parent: RichTree,
+    label: Text,
+    path: str,
+    value: object,
 ) -> None:
     del path, value  # unused
     parent.add(label)
 
 
 class InlineTree(Static):
+    if TYPE_CHECKING:
+        app = getters.app(App[None])
+
     COMPONENT_CLASSES = {
         "tree--key",
         "tree--key-selected",
@@ -40,30 +57,49 @@ class InlineTree(Static):
     }
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        parsed: ParsedEntry,
+        fields: FieldManager,
+        search: SearchEngine,
+    ) -> None:
         super().__init__()
-        self._parsed: ParsedEntry | None = None
-
-    def set_entry(self, parsed: ParsedEntry) -> None:
         self._parsed = parsed
+        self._fields = fields
+        self._search = search
 
-    def refresh_content(self, selected_fields: set[str], search: str) -> None:
-        if self._parsed is None:
+    async def on_mount(self) -> None:
+        await self._fields.on_change.subscribe_async(self._on_change)
+        await self._search.on_change.subscribe_async(self._on_change)
+        self.app.theme_changed_signal.subscribe(self, lambda _: self._render_tree())
+        self._render_tree()
+
+    async def _on_change(self, _: None) -> None:
+        self._render_tree()
+
+    def _render_tree(self) -> None:
+        custom = self._fields.custom_fields_set
+        if not custom:
+            self.remove_class("has-content")
             return
+        self.add_class("has-content")
 
         key_style = self.get_component_rich_style("tree--key", partial=True)
-        selected_style = self.get_component_rich_style("tree--key-selected", partial=True)
+        selected_style = self.get_component_rich_style(
+            "tree--key-selected", partial=True
+        )
 
-        filtered = {f: get_nested(self._parsed.expanded, f) for f in selected_fields}
+        filtered = {f: get_nested(self._parsed.expanded, f) for f in custom}
         tree = RichTree("", guide_style="dim", hide_root=True)
         visitor = TreeBuildVisitor(
             root=tree,
             add_branch=_add_branch,
             add_leaf=_add_leaf,
-            selected=selected_fields,
+            selected=custom,
             key_style=key_style,
             selected_style=selected_style,
-            search_term=search,
+            search_term=self._search.term,
         )
         walk_tree(
             value=filtered,

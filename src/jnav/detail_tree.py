@@ -26,13 +26,19 @@ class TreeNodeData(TypedDict):
 
 
 def _detail_add_branch(
-    parent: TreeNode[TreeNodeData], label: Text, path: str, value: object
+    parent: TreeNode[TreeNodeData],
+    label: Text,
+    path: str,
+    value: object,
 ) -> TreeNode[TreeNodeData]:
     return parent.add(label, data={"path": path, "value": value})
 
 
 def _detail_add_leaf(
-    parent: TreeNode[TreeNodeData], label: Text, path: str, value: object
+    parent: TreeNode[TreeNodeData],
+    label: Text,
+    path: str,
+    value: object,
 ) -> None:
     parent.add_leaf(label, data={"path": path, "value": value})
 
@@ -114,6 +120,7 @@ class DetailTree(Tree[TreeNodeData]):
     async def on_mount(self) -> None:  # pyright: ignore[reportIncompatibleMethodOverride, reportImplicitOverride]
         await self._fields.on_change.subscribe_async(self._rerender)
         await self._search.on_change.subscribe_async(self._rerender)
+        self.app.theme_changed_signal.subscribe(self, lambda _: self._rebuild_tree())
 
     async def _rerender(self, _: None) -> None:
         self._rebuild_tree()
