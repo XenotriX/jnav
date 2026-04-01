@@ -17,7 +17,7 @@ from .filter_provider import FilterProvider
 from .filtering import get_nested, jq_value_literal, resolve_selected_paths
 from .parsing import ParsedEntry
 from .search_engine import SearchEngine
-from .tree_rendering import walk_tree
+from .tree_rendering import TreeBuildVisitor, walk_tree
 
 
 class TreeNodeData(TypedDict):
@@ -25,32 +25,17 @@ class TreeNodeData(TypedDict):
     value: object
 
 
-def _build_tree(
-    node: TreeNode[TreeNodeData],
-    value: object,
-    path: str = "",
-    selected: set[str] | None = None,
-    search_term: str = "",
-    json_paths: set[str] | None = None,
+def _detail_add_branch(
+    parent: TreeNode[TreeNodeData], label: Text, path: str, value: object
+) -> TreeNode[TreeNodeData]:
+    return parent.add(label, data={"path": path, "value": value})
+
+
+def _detail_add_leaf(
+    parent: TreeNode[TreeNodeData], label: Text, path: str, value: object
 ) -> None:
-    sel = selected or set()
+    parent.add_leaf(label, data={"path": path, "value": value})
 
-    def add_branch(label: Text, children_value: object, child_path: str, orig_value: object) -> None:
-        branch = node.add(label, data={"path": child_path, "value": orig_value})
-        _build_tree(branch, children_value, child_path, sel, search_term, json_paths)
-
-    def add_leaf(label: Text, child_path: str, orig_value: object) -> None:
-        node.add_leaf(label, data={"path": child_path, "value": orig_value})
-
-    walk_tree(
-        value=value,
-        path=path,
-        selected=sel,
-        add_branch=add_branch,
-        add_leaf=add_leaf,
-        search_term=search_term,
-        json_paths=json_paths,
-    )
 
 if TYPE_CHECKING:
     from textual import getters
@@ -70,6 +55,17 @@ def _format_timestamp(value: str) -> str:
 
 
 class DetailTree(Tree[TreeNodeData]):
+    COMPONENT_CLASSES = {
+        "tree--key",
+        "tree--key-selected",
+    }
+
+    DEFAULT_CSS = """
+    DetailTree {
+        & > .tree--key { color: $primary; text-style: italic; }
+        & > .tree--key-selected { color: $primary; text-style: bold underline; }
+    }
+    """
 
     if TYPE_CHECKING:
         app = getters.app(App[None])
@@ -148,25 +144,26 @@ class DetailTree(Tree[TreeNodeData]):
         if self.show_selected_only:
             label += " (selected)"
 
+        key_style = self.get_component_rich_style("tree--key", partial=True)
+        selected_style = self.get_component_rich_style("tree--key-selected", partial=True)
+
         self.clear()
         self.root.set_label(label)
-        if self.show_selected_only:
-            filtered = {col: get_nested(entry, col) for col in self._fields.active_fields}
-            _build_tree(
-                self.root,
-                filtered,
-                selected=selected,
-                search_term=self._search.term,
-                json_paths=self._entry.expanded_paths,
-            )
-        else:
-            _build_tree(
-                self.root,
-                entry,
-                selected=selected,
-                search_term=self._search.term,
-                json_paths=self._entry.expanded_paths,
-            )
+        data = (
+            {col: get_nested(entry, col) for col in self._fields.active_fields}
+            if self.show_selected_only
+            else entry
+        )
+        visitor = TreeBuildVisitor(
+            root=self.root,
+            add_branch=_detail_add_branch,
+            add_leaf=_detail_add_leaf,
+            selected=selected,
+            key_style=key_style,
+            selected_style=selected_style,
+            search_term=self._search.term,
+        )
+        walk_tree(value=data, path="", visitor=visitor, json_paths=self._entry.expanded_paths)
         self.root.expand_all()
 
     def action_leader_filter_and(self) -> None:

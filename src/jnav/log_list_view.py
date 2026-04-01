@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, override
 
-from rich.text import Text
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.widgets import ListView, Static
@@ -16,29 +15,37 @@ from .store import IndexedEntry
 from .tree_rendering import walk_tree
 
 
+class _CountVisitor:
+    def __init__(self) -> None:
+        self.count = 0
+
+    def enter_property(self, key: str, value: dict[str, Any] | list[object], path: str, from_json: bool) -> None:
+        del key, value, path, from_json  # unused
+        self.count += 1
+
+    def exit_property(self) -> None:
+        pass
+
+    def on_property(self, key: str, value: object, path: str) -> None:
+        del key, value, path  # unused
+        self.count += 1
+
+    def enter_item(self, index: int, value: dict[str, Any] | list[object], path: str) -> None:
+        del index, value, path  # unused
+        self.count += 1
+
+    def exit_item(self) -> None:
+        pass
+
+    def on_item(self, index: int, value: object, path: str) -> None:
+        del index, value, path  # unused
+        self.count += 1
+
+
 def _count_tree_nodes(value: object) -> int:
-    count = 0
-
-    def add_branch(
-        label: Text, children_value: object, child_path: str, orig_value: object
-    ) -> None:
-        del label, child_path, orig_value  # unused
-        nonlocal count
-        count += 1 + _count_tree_nodes(children_value)
-
-    def add_leaf(label: Text, child_path: str, orig_value: object) -> None:
-        del label, child_path, orig_value  # unused
-        nonlocal count
-        count += 1
-
-    walk_tree(
-        value=value,
-        path="",
-        selected=set(),
-        add_branch=add_branch,
-        add_leaf=add_leaf,
-    )
-    return count
+    visitor = _CountVisitor()
+    walk_tree(value=value, path="", visitor=visitor)
+    return visitor.count
 
 
 if TYPE_CHECKING:

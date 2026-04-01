@@ -1,20 +1,29 @@
-"""Shared tree rendering logic for both the interactive detail panel and inline expanded views."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, cast
+from typing import Any, Generic, Protocol, TypeVar, cast
 
+from rich.style import Style
 from rich.text import Text
 
-AddBranchFn = Callable[[Text, object, str, object], None]
-AddLeafFn = Callable[[Text, str, object], None]
+T = TypeVar("T")
 
 PRIORITY_KEYS = ("timestamp", "ts", "time", "level", "severity", "message", "msg")
 
-SELECTED_STYLE = "#61AFEF bold underline"
 JSON_STRING_STYLE = "orange3 italic"
 SEARCH_HIGHLIGHT_STYLE = "on dark_orange3"
+
+AddBranchFn = Callable[[Any, Text, str, object], Any]
+AddLeafFn = Callable[[Any, Text, str, object], None]
+
+
+class TreeVisitor(Protocol):
+    def enter_property(self, key: str, value: dict[str, Any] | list[object], path: str, from_json: bool) -> None: ...
+    def exit_property(self) -> None: ...
+    def on_property(self, key: str, value: object, path: str) -> None: ...
+    def enter_item(self, index: int, value: dict[str, Any] | list[object], path: str) -> None: ...
+    def exit_item(self) -> None: ...
+    def on_item(self, index: int, value: object, path: str) -> None: ...
 
 
 def sorted_keys(d: dict[str, Any]) -> list[str]:
@@ -38,7 +47,6 @@ def oneline(value: object) -> str:
 
 
 def highlight_text(text: Text, term: str) -> Text:
-    """Highlight all case-insensitive occurrences of term in a Text object."""
     if not term:
         return text
     plain = text.plain.lower()
@@ -53,64 +61,81 @@ def highlight_text(text: Text, term: str) -> Text:
     return text
 
 
-def branch_label(
-    key: str,
-    value: object,
-    path: str,
-    custom_selected: set[str],
-    from_json_string: bool = False,
-) -> Text:
-    is_custom = path in custom_selected
-    key_style = SELECTED_STYLE if is_custom else "#61AFEF italic"
-    if isinstance(value, dict):
-        indicator = '"{}"' if from_json_string else "{}"
-        ind_style = JSON_STRING_STYLE if from_json_string else "dim"
-        return Text.assemble((key, key_style), (": ", "dim"), (indicator, ind_style))
-    elif isinstance(value, list):
-        value = cast(list[object], value)
-        n = len(value)
-        indicator = f'"[{n} items]"' if from_json_string else f"[{n} items]"
-        ind_style = JSON_STRING_STYLE if from_json_string else "dim"
-        return Text.assemble((key, key_style), (": ", "dim"), (indicator, ind_style))
-    return Text(key, style="#61AFEF italic")
+class TreeBuildVisitor(Generic[T]):
+    def __init__(
+        self,
+        *,
+        root: T,
+        add_branch: AddBranchFn,
+        add_leaf: AddLeafFn,
+        selected: set[str],
+        key_style: str | Style,
+        selected_style: str | Style,
+        search_term: str = "",
+    ) -> None:
+        self._stack: list[T] = [root]
+        self._add_branch = add_branch
+        self._add_leaf = add_leaf
+        self._selected = selected
+        self._key_style = key_style
+        self._selected_style = selected_style
+        self._search_term = search_term
 
+    def _style_for(self, path: str) -> str | Style:
+        return self._selected_style if path in self._selected else self._key_style
 
-def leaf_label(key: str, value: object, path: str, custom_selected: set[str]) -> Text:
-    is_custom = path in custom_selected
-    key_style = SELECTED_STYLE if is_custom else "#61AFEF italic"
-    label = Text.assemble(
-        (key, key_style), (": ", "dim"), (oneline(value), value_style(value))
-    )
-    label.no_wrap = True
-    label.overflow = "ellipsis"
-    return label
+    def _hl(self, text: Text) -> Text:
+        return highlight_text(text, self._search_term) if self._search_term else text
 
+    def enter_property(self, key: str, value: dict[str, Any] | list[object], path: str, from_json: bool) -> None:
+        style = self._style_for(path)
+        if isinstance(value, dict):
+            indicator = '"{}"' if from_json else "{}"
+        else:
+            n = len(value)
+            indicator = f'"[{n} items]"' if from_json else f"[{n} items]"
+        ind_style = JSON_STRING_STYLE if from_json else "dim"
+        label = self._hl(Text.assemble((key, style), (": ", "dim"), (indicator, ind_style)))
+        new_node = self._add_branch(self._stack[-1], label, path, value)
+        self._stack.append(new_node)
 
-def index_label(index: int, value: object | None = None) -> Text:
-    if value is None:
-        return Text(f"[{index}]", style="dim")
-    label = Text.assemble(
-        (f"[{index}]", "dim"), (": ", "dim"), (oneline(value), value_style(value))
-    )
-    label.no_wrap = True
-    label.overflow = "ellipsis"
-    return label
+    def exit_property(self) -> None:
+        self._stack.pop()
+
+    def on_property(self, key: str, value: object, path: str) -> None:
+        style = self._style_for(path)
+        label = self._hl(Text.assemble(
+            (key, style), (": ", "dim"), (oneline(value), value_style(value))
+        ))
+        label.no_wrap = True
+        label.overflow = "ellipsis"
+        self._add_leaf(self._stack[-1], label, path, value)
+
+    def enter_item(self, index: int, value: dict[str, Any] | list[object], path: str) -> None:
+        label = self._hl(Text(f"[{index}]", style="dim"))
+        new_node = self._add_branch(self._stack[-1], label, path, value)
+        self._stack.append(new_node)
+
+    def exit_item(self) -> None:
+        self._stack.pop()
+
+    def on_item(self, index: int, value: object, path: str) -> None:
+        label = self._hl(Text.assemble(
+            (f"[{index}]", "dim"), (": ", "dim"), (oneline(value), value_style(value))
+        ))
+        label.no_wrap = True
+        label.overflow = "ellipsis"
+        self._add_leaf(self._stack[-1], label, path, value)
 
 
 def walk_tree(
     *,
     value: object,
     path: str,
-    selected: set[str],
-    add_branch: AddBranchFn,
-    add_leaf: AddLeafFn,
-    search_term: str = "",
+    visitor: TreeVisitor,
     json_paths: set[str] | None = None,
 ) -> None:
     jp = json_paths or set()
-
-    def _hl(label: Text) -> Text:
-        return highlight_text(label, search_term) if search_term else label
 
     if isinstance(value, dict):
         value = cast(dict[str, Any], value)
@@ -118,21 +143,21 @@ def walk_tree(
             v = value[k]
             child_path = f"{path}.{k}" if path else k
             if isinstance(v, (dict, list)):
-                v = cast(dict[str, object] | list[object], v)
+                v = cast(dict[str, Any] | list[object], v)
                 from_json = child_path in jp
-                label = branch_label(
-                    k, v, child_path, selected, from_json_string=from_json
-                )
-                add_branch(_hl(label), v, child_path, v)
+                visitor.enter_property(k, v, child_path, from_json)
+                walk_tree(value=v, path=child_path, visitor=visitor, json_paths=json_paths)
+                visitor.exit_property()
             else:
-                label = leaf_label(k, v, child_path, selected)
-                add_leaf(_hl(label), child_path, v)
+                visitor.on_property(k, v, child_path)
     elif isinstance(value, list):
         value = cast(list[object], value)
         for i, item in enumerate(value):
             child_path = f"{path}[{i}]"
             if isinstance(item, (dict, list)):
-                item = cast(dict[str, object] | list[object], item)
-                add_branch(_hl(index_label(i)), item, child_path, item)
+                item = cast(dict[str, Any] | list[object], item)
+                visitor.enter_item(i, item, child_path)
+                walk_tree(value=item, path=child_path, visitor=visitor, json_paths=json_paths)
+                visitor.exit_item()
             else:
-                add_leaf(_hl(index_label(i, item)), child_path, item)
+                visitor.on_item(i, item, child_path)
