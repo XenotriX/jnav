@@ -8,14 +8,15 @@ from io import BufferedReader
 logger = logging.getLogger(__name__)
 
 
-async def read_file(path: str) -> AsyncIterator[str]:
-    """Yield lines from a file, tailing for new content at EOF."""
+async def read_file(path: str, *, tail: bool = True) -> AsyncIterator[str]:
+    """Yield lines from a file, optionally tailing for new content at EOF."""
     with open(path, mode="r", errors="replace") as f:
         while True:
             line = f.readline()
 
             if not line:
-                # EOF reached, wait for new lines
+                if not tail:
+                    return
                 await asyncio.sleep(0.1)
                 continue
 
