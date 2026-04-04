@@ -1,4 +1,4 @@
-import json
+import orjson
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -16,11 +16,11 @@ def parse_line(line: str) -> dict[str, Any] | None:
     if not line:
         return None
     try:
-        obj = json.loads(line)
+        obj = orjson.loads(line)
         if isinstance(obj, dict):
             return cast(dict[str, Any], obj)
         return None
-    except json.JSONDecodeError:
+    except orjson.JSONDecodeError:
         return None
 
 
@@ -52,12 +52,12 @@ def expand_json_strings(
     # Try to parse JSON strings
     if isinstance(obj, str) and obj and obj[0] in ("{", "["):
         try:
-            parsed = json.loads(obj)
+            parsed = orjson.loads(obj)
             if isinstance(parsed, (dict, list)):
                 parsed = cast(dict[str, Any] | list[Any], parsed)
                 expanded_paths.add(path)
                 return expand_json_strings(parsed, path, expanded_paths)
-        except json.JSONDecodeError, ValueError:
+        except orjson.JSONDecodeError, ValueError:
             pass
     return obj
 

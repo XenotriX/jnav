@@ -10,6 +10,7 @@ dependencies = [
     "jq>=1.8.0",
     "python-json-logger>=4.0.0",
     "aioreactive>=0.20.0",
+    "orjson>=3.11.8",
 ]
 
 [project.scripts]
