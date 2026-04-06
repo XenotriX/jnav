@@ -19,6 +19,10 @@ from .logging import init_logging
 from .parsing import parse_line, preprocess_entry
 from .reading import read_file, read_pipe, setup_stdin_pipe
 
+import logging
+
+logging.getLogger("aioreactive").setLevel(logging.WARNING)
+
 _STATE_DIR = Path.home() / ".local" / "share" / "jnav"
 
 

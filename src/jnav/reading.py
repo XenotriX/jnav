@@ -20,7 +20,6 @@ async def read_file(path: str, *, tail: bool = True) -> AsyncIterator[str]:
                 await asyncio.sleep(0.1)
                 continue
 
-            logger.debug("line_read")
             yield line
 
 
