@@ -130,7 +130,8 @@ async def test_append_to_model_after_mount():
         vl = cast(VirtualListView[str], app.query_one(VirtualListView))
         assert vl.count() == 2
 
-        vl._model.append("gamma")  # pyright: ignore[reportPrivateUsage]
+        model = cast(ListModel[str], vl._model)  # pyright: ignore[reportPrivateUsage]
+        model.append("gamma")
         vl.refresh()
         assert vl.count() == 3
         assert get_visible_items(vl) == ["alpha", "beta", "gamma"]

@@ -5,10 +5,10 @@ import pytest_asyncio
 
 from jnav.filter_provider import FilterProvider
 from jnav.log_model import LogModel
-from jnav.parsing import ParsedEntry, preprocess_entry
+from jnav.parsing import ParsedEntry
 from jnav.store import IndexedEntry, Store
 
-from .conftest import make_collector, make_signal_collector
+from .conftest import make_collector, make_entry, make_signal_collector
 
 type Env = tuple[Store, LogModel, FilterProvider]
 
@@ -17,9 +17,9 @@ def _entry(level: str, message: str = "") -> dict[str, Any]:
     return {"level": level, "message": message}
 
 
-INFO: ParsedEntry = preprocess_entry(_entry("INFO"))
-ERROR: ParsedEntry = preprocess_entry(_entry("ERROR"))
-DEBUG: ParsedEntry = preprocess_entry(_entry("DEBUG"))
+INFO: ParsedEntry = make_entry(_entry("INFO"))
+ERROR: ParsedEntry = make_entry(_entry("ERROR"))
+DEBUG: ParsedEntry = make_entry(_entry("DEBUG"))
 
 ERROR_FILTER: str = '.level == "ERROR"'
 
@@ -44,7 +44,7 @@ class TestAccessors:
         assert model.is_empty()
         assert model.count() == 0
 
-        entry = preprocess_entry({"a": 1})
+        entry = make_entry({"a": 1})
         await store.append_entries([entry])
 
         assert not model.is_empty()
@@ -58,7 +58,7 @@ class TestAccessors:
         received, collect = make_collector()
         await model.on_append.subscribe_async(collect)
 
-        entry = preprocess_entry({"level": "INFO"})
+        entry = make_entry({"level": "INFO"})
         await store.append_entries([entry])
 
         assert len(received) == 1

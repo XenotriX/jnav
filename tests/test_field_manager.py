@@ -4,14 +4,13 @@ import pytest
 import pytest_asyncio
 
 from jnav.field_manager import FieldManager, FieldSelector
-from jnav.parsing import preprocess_entry
 from jnav.store import IndexedEntry
 
-from .conftest import make_signal_collector
+from .conftest import make_entry, make_signal_collector
 
 
 def _ie(index: int, data: dict[str, Any]) -> IndexedEntry:
-    return IndexedEntry(index, preprocess_entry(data))
+    return IndexedEntry(index, make_entry(data))
 
 
 @pytest_asyncio.fixture

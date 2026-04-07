@@ -1,44 +1,45 @@
 import json
 
-from jnav.parsing import ParsedEntry, parse_line, preprocess_entry
+from jnav.parsing import ParsedEntry, parse_entry
 
 
-class TestParseLine:
+class TestParseEntry:
     def test_valid_json_object(self) -> None:
-        result = parse_line('{"key": "value"}')
-        assert result == {"key": "value"}
+        result = parse_entry('{"key": "value"}')
+        assert isinstance(result, ParsedEntry)
+        assert result.expanded == {"key": "value"}
+        assert result.raw == '{"key": "value"}'
 
     def test_invalid_json(self) -> None:
-        assert parse_line("not json") is None
+        assert parse_entry("not json") is None
 
     def test_empty_line(self) -> None:
-        assert parse_line("") is None
+        assert parse_entry("") is None
 
     def test_json_array_rejected(self) -> None:
-        assert parse_line("[1, 2, 3]") is None
+        assert parse_entry("[1, 2, 3]") is None
 
     def test_whitespace_stripped(self) -> None:
-        result = parse_line('  {"a": 1}  \n')
-        assert result == {"a": 1}
+        result = parse_entry('  {"a": 1}  \n')
+        assert result is not None
+        assert result.expanded == {"a": 1}
+        assert result.raw == '{"a": 1}'
 
-
-class TestPreprocessEntry:
-    def test_basic_entry(self) -> None:
-        entry = {"level": "INFO", "message": "hello"}
-        parsed = preprocess_entry(entry)
-        assert isinstance(parsed, ParsedEntry)
-        assert parsed.raw is entry
-        assert parsed.expanded == entry
-        assert parsed.expanded_paths == set()
+    def test_basic_entry_has_no_expanded_paths(self) -> None:
+        result = parse_entry('{"level": "INFO", "message": "hello"}')
+        assert result is not None
+        assert result.expanded == {"level": "INFO", "message": "hello"}
+        assert result.expanded_paths == set()
 
     def test_nested_json_string_expanded(self) -> None:
         inner = json.dumps({"a": 1, "b": 2})
-        entry = {"data": inner}
-        parsed = preprocess_entry(entry)
-        assert parsed.expanded["data"] == {"a": 1, "b": 2}
-        assert "data" in parsed.expanded_paths
+        result = parse_entry(json.dumps({"data": inner}))
+        assert result is not None
+        assert result.expanded["data"] == {"a": 1, "b": 2}
+        assert "data" in result.expanded_paths
 
     def test_non_json_string_left_alone(self) -> None:
-        entry = {"msg": "plain text"}
-        parsed = preprocess_entry(entry)
-        assert parsed.expanded["msg"] == "plain text"
+        result = parse_entry('{"msg": "plain text"}')
+        assert result is not None
+        assert result.expanded["msg"] == "plain text"
+        assert result.expanded_paths == set()

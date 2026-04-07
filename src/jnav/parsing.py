@@ -1,74 +1,101 @@
-import orjson
 from dataclasses import dataclass, field
 from typing import Any, cast
+
+import orjson
 
 
 @dataclass
 class ParsedEntry:
-    raw: dict[str, Any]
+    raw: str
     expanded: dict[str, Any]
     expanded_paths: set[str] = field(default_factory=set)
 
 
-def parse_line(line: str) -> dict[str, Any] | None:
-    """Parse a single line into a JSON object, or return None if invalid."""
-    line = line.strip()
-    if not line:
+def parse_entry(line: str) -> ParsedEntry | None:
+    """Parse a JSON line into a ``ParsedEntry`` with nested JSON-encoded
+    strings expanded in place. Returns ``None`` for blank lines, invalid
+    JSON, and JSON that isn't an object."""
+    stripped = line.strip()
+    if not stripped:
         return None
-    try:
-        obj = orjson.loads(line)
-        if isinstance(obj, dict):
-            return cast(dict[str, Any], obj)
+    parsed = _try_parse_json(stripped)
+    if not isinstance(parsed, dict):
         return None
-    except orjson.JSONDecodeError:
-        return None
-
-
-def expand_json_strings(
-    obj: object,
-    path: str = "",
-    expanded_paths: set[str] | None = None,
-) -> object:
-    """Recursively expand JSON-encoded strings, tracking which paths were strings."""
-    if expanded_paths is None:
-        expanded_paths = set()
-
-    # Recurse into dicts
-    if isinstance(obj, dict):
-        obj = cast(dict[str, Any], obj)
-        return {
-            k: expand_json_strings(v, f"{path}.{k}" if path else k, expanded_paths)
-            for k, v in obj.items()
-        }
-
-    # Recurse into lists
-    if isinstance(obj, list):
-        obj = cast(list[Any], obj)
-        return [
-            expand_json_strings(item, f"{path}[{i}]", expanded_paths)
-            for i, item in enumerate(obj)
-        ]
-
-    # Try to parse JSON strings
-    if isinstance(obj, str) and obj and obj[0] in ("{", "["):
-        try:
-            parsed = orjson.loads(obj)
-            if isinstance(parsed, (dict, list)):
-                parsed = cast(dict[str, Any] | list[Any], parsed)
-                expanded_paths.add(path)
-                return expand_json_strings(parsed, path, expanded_paths)
-        except orjson.JSONDecodeError, ValueError:
-            pass
-    return obj
-
-
-def preprocess_entry(entry: dict[str, Any]) -> ParsedEntry:
-    """Parse and expand a raw JSON dict into a ParsedEntry."""
     expanded_paths: set[str] = set()
-    expanded = expand_json_strings(entry, "", expanded_paths)
-    assert isinstance(expanded, dict)
-    return ParsedEntry(
-        raw=entry,
-        expanded=cast(dict[str, Any], expanded),
+    _expand_in_place(
+        parsed,
+        path="",
         expanded_paths=expanded_paths,
     )
+    return ParsedEntry(
+        raw=stripped,
+        expanded=parsed,
+        expanded_paths=expanded_paths,
+    )
+
+
+def _expand_in_place(
+    obj: dict[str, Any] | list[Any],
+    *,
+    path: str,
+    expanded_paths: set[str],
+) -> None:
+    """Recursively replace JSON-encoded string values with their parsed
+    objects, mutating dicts and lists in place."""
+    match obj:
+        case dict():
+            for k, v in obj.items():
+                _expand_slot(
+                    obj,
+                    key=k,
+                    value=v,
+                    child_path=f"{path}.{k}" if path else k,
+                    expanded_paths=expanded_paths,
+                )
+        case list():
+            for i, v in enumerate(obj):
+                _expand_slot(
+                    obj,
+                    key=i,
+                    value=v,
+                    child_path=f"{path}[{i}]",
+                    expanded_paths=expanded_paths,
+                )
+
+
+def _expand_slot(
+    container: dict[str, Any] | list[Any],
+    *,
+    key: str | int,
+    value: object,
+    child_path: str,
+    expanded_paths: set[str],
+) -> None:
+    # If the value is a string, try to parse it as JSON
+    if isinstance(value, str):
+        parsed = _try_parse_json(value)
+        if parsed is not None:
+            container[key] = parsed  # pyright: ignore[reportArgumentType, reportCallIssue]
+            expanded_paths.add(child_path)
+            value = parsed
+
+    # If the value is now a dict or list, recursively expand it
+    if isinstance(value, (dict, list)):
+        value = cast(dict[str, Any] | list[Any], value)
+        _expand_in_place(
+            value,
+            path=child_path,
+            expanded_paths=expanded_paths,
+        )
+
+
+def _try_parse_json(value: str) -> dict[str, Any] | list[Any] | None:
+    if not value or value[0] not in ("{", "["):
+        return None
+    try:
+        parsed = orjson.loads(value)
+    except orjson.JSONDecodeError, ValueError:
+        return None
+    if isinstance(parsed, (dict, list)):
+        return cast(dict[str, Any] | list[Any], parsed)
+    return None

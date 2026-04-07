@@ -1,16 +1,15 @@
 import pytest
 
-from jnav.parsing import preprocess_entry
 from jnav.store import IndexedEntry, Store
 
-from .conftest import make_collector
+from .conftest import make_collector, make_entry
 
 
 class TestStore:
     @pytest.mark.asyncio
     async def test_append_entries_adds_to_list(self) -> None:
         store = Store()
-        entries = [preprocess_entry({"a": 1}), preprocess_entry({"a": 2})]
+        entries = [make_entry({"a": 1}), make_entry({"a": 2})]
         received, collect = make_collector()
         await store.on_append.subscribe_async(collect)
         await store.append_entries(entries)
@@ -29,8 +28,8 @@ class TestStore:
         batches, collect = make_collector()
         await store.on_append.subscribe_async(collect)
 
-        e1 = preprocess_entry({"x": 1})
-        e2 = preprocess_entry({"x": 2})
+        e1 = make_entry({"x": 1})
+        e2 = make_entry({"x": 2})
         await store.append_entries([e1])
         await store.append_entries([e2])
 

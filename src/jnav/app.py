@@ -364,8 +364,7 @@ class JnavApp(App[None]):
     def action_copy_entry(self) -> None:
         tree = self.query_one("#detail-tree", DetailTree)
         if tree.entry:
-            text = json.dumps(tree.entry.raw, indent=2, default=str)
-            self.copy_to_clipboard(text)
+            self.copy_to_clipboard(tree.entry.raw)
             self.notify("Entry copied to clipboard", timeout=2)
 
     def action_focus_list(self) -> None:

@@ -1,4 +1,5 @@
 import asyncio
+from typing import cast
 
 import aioreactive as rx
 import pytest
@@ -6,10 +7,15 @@ import pytest
 from jnav.buffer import buffer_time_or_count
 from jnav.filter_provider import FilterProvider
 from jnav.log_model import LogModel
-from jnav.parsing import ParsedEntry, parse_line, preprocess_entry
+from jnav.parsing import ParsedEntry, parse_entry
 from jnav.store import Store
 
-from tests.conftest import SAMPLE_LINES, fake_line_reader, make_collector
+from tests.conftest import (
+    SAMPLE_LINES,
+    fake_line_reader,
+    make_collector,
+    make_entry,
+)
 
 
 class TestRxPipe:
@@ -26,9 +32,9 @@ class TestRxPipe:
 
         pipe = rx.pipe(
             rx.from_async_iterable(lines),
-            rx.map(lambda line: parse_line(line)),
+            rx.map(lambda line: parse_entry(line)),
             rx.filter(lambda result: result is not None),
-            rx.map(lambda entry: preprocess_entry(entry)),
+            rx.map(lambda entry: cast(ParsedEntry, entry)),
         )
 
         results: list[ParsedEntry] = []
@@ -50,9 +56,9 @@ class TestFullPipeline:
             buffer_time_or_count(
                 rx.pipe(
                     rx.from_async_iterable(lines),
-                    rx.map(lambda line: parse_line(line)),
+                    rx.map(lambda line: parse_entry(line)),
                     rx.filter(lambda result: result is not None),
-                    rx.map(lambda entry: preprocess_entry(entry)),
+                    rx.map(lambda entry: cast(ParsedEntry, entry)),
                 ),
                 max_count=100,
                 timeout=0.1,
@@ -79,9 +85,9 @@ class TestFullPipeline:
             buffer_time_or_count(
                 rx.pipe(
                     rx.from_async_iterable(lines),
-                    rx.map(lambda line: parse_line(line)),
+                    rx.map(lambda line: parse_entry(line)),
                     rx.filter(lambda result: result is not None),
-                    rx.map(lambda entry: preprocess_entry(entry)),
+                    rx.map(lambda entry: cast(ParsedEntry, entry)),
                 ),
                 max_count=100,
                 timeout=0.1,
@@ -116,7 +122,7 @@ class TestFullPipeline:
         model = LogModel(store=store, filter_provider=FilterProvider())
         await model.start()
 
-        entries = [preprocess_entry({"i": i}) for i in range(5)]
+        entries = [make_entry({"i": i}) for i in range(5)]
         await store.append_entries(entries)
 
         # Late subscriber: missed the on_append emission

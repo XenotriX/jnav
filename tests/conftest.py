@@ -1,6 +1,8 @@
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 
+from jnav.parsing import ParsedEntry, parse_entry
 from jnav.store import IndexedEntry
 
 SAMPLE_LINES = [
@@ -8,6 +10,13 @@ SAMPLE_LINES = [
     json.dumps({"level": "ERROR", "message": "boom"}),
     json.dumps({"level": "DEBUG", "message": "trace", "nested": '{"a": 1}'}),
 ]
+
+
+def make_entry(data: dict[str, Any]) -> ParsedEntry:
+    """Build a ``ParsedEntry`` from a dict for test fixtures."""
+    result = parse_entry(json.dumps(data))
+    assert result is not None
+    return result
 
 
 async def fake_line_reader(lines: list[str]) -> AsyncIterator[str]:

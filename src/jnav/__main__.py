@@ -3,6 +3,7 @@ import hashlib
 import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import cast
 
 import aioreactive as rx
 import click
@@ -16,7 +17,7 @@ from jnav.store import Store
 from .app import JnavApp
 from .buffer import buffer_time_or_count
 from .logging import init_logging
-from .parsing import parse_line, preprocess_entry
+from .parsing import ParsedEntry, parse_entry
 from .reading import read_file, read_pipe, setup_stdin_pipe
 
 import logging
@@ -65,9 +66,9 @@ async def _run(file: str | None) -> None:
         buffer_time_or_count(
             rx.pipe(
                 rx.from_async_iterable(lines),
-                rx.map(lambda line: parse_line(line)),
+                rx.map(lambda line: parse_entry(line)),
                 rx.filter(lambda result: result is not None),
-                rx.map(lambda entry: preprocess_entry(entry)),
+                rx.map(lambda entry: cast(ParsedEntry, entry)),
             ),
             max_count=10000,
             timeout=0.1,

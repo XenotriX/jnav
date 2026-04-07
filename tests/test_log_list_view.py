@@ -1,15 +1,8 @@
+# pyright: reportPrivateUsage=false
+
 from unittest.mock import Mock
 
-from jnav.parsing import ParsedEntry
-from jnav.store import IndexedEntry
-
 from jnav.log_list_view import LogListView
-
-
-def _ie(store_idx: int) -> IndexedEntry:
-    return IndexedEntry(
-        store_idx, ParsedEntry(raw={}, expanded={}, expanded_paths=set())
-    )
 
 
 def _make_list_view(store_indices: list[int]) -> LogListView:
