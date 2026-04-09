@@ -84,7 +84,7 @@ class DetailTree(Tree[TreeNodeData]):
         Binding("G", "scroll_end", show=False),
         Binding("ctrl+d", "page_down", show=False),
         Binding("ctrl+u", "page_up", show=False),
-        Binding("s", "add_select", "Add field"),
+        Binding("s", "add_select", "(Un)select"),
         Binding("t", "toggle_filter_tree", "Selected only"),
         Binding("v", "view_value", "View"),
     ]
@@ -265,7 +265,11 @@ class DetailTree(Tree[TreeNodeData]):
         node = self.cursor_node
         if node is None or node.data is None:
             return
-        await self._fields.add_field(node.data["path"])
+        path = node.data["path"]
+        if self._fields.has_field(path):
+            await self._fields.remove_field_by_path(path)
+        else:
+            await self._fields.add_field(path)
 
     def action_view_value(self) -> None:
         node = self.cursor_node

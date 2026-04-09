@@ -64,12 +64,21 @@ class FieldManager:
             self._mapping = FieldMapping()
         await self.on_change.asend(None)
 
+    def has_field(self, path: str) -> bool:
+        return any(f["path"] == path for f in self._custom_fields)
+
     async def add_field(self, path: str) -> None:
-        existing = {f["path"] for f in self._custom_fields}
-        if path in existing:
+        if self.has_field(path):
             return
         self._custom_fields.append({"path": path, "enabled": True})
         await self.on_change.asend(None)
+
+    async def remove_field_by_path(self, path: str) -> None:
+        for i, f in enumerate(self._custom_fields):
+            if f["path"] == path:
+                self._custom_fields.pop(i)
+                await self.on_change.asend(None)
+                return
 
     async def toggle_field(self, index: int) -> None:
         self._custom_fields[index]["enabled"] = not self._custom_fields[index][
