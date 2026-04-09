@@ -104,13 +104,14 @@ class VirtualListView(Widget, Generic[T], can_focus=True):
         model: Model[T],
         render_item: RenderItemFn[T],
         id: str | None = None,
+        follow: bool = False,
     ) -> None:
         super().__init__(id=id)
         self._model = model
         self._scroll_top_index: int = 0
         self._scroll_line_offset: int = 0
         self._render_item = render_item
-        self._follow = False
+        self._follow = follow
 
     @property
     def scroll_top_index(self) -> int:

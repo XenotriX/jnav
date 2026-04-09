@@ -42,7 +42,7 @@ def _get_input_iterator(file: str | None) -> AsyncIterator[str] | None:
     return None
 
 
-async def _run(file: str | None) -> None:
+async def _run(file: str | None, follow: bool) -> None:
     lines = _get_input_iterator(file)
 
     if lines is None:
@@ -84,6 +84,7 @@ async def _run(file: str | None) -> None:
         fields=fields,
         search=search,
         state_file=state_file,
+        follow=follow,
     )
     app.title = "jnav"
     await app.run_async()
@@ -91,10 +92,11 @@ async def _run(file: str | None) -> None:
 
 @click.command()
 @click.argument("file", required=False, type=click.Path(exists=True))
-def main(file: str | None) -> None:
+@click.option("--follow", "-f", is_flag=True, help="Follow the file for new entries")
+def main(file: str | None, follow: bool) -> None:
     """Interactive JSON log viewer with jq filtering."""
     init_logging()
-    asyncio.run(_run(file))
+    asyncio.run(_run(file, follow=follow))
 
 
 if __name__ == "__main__":

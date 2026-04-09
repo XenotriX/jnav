@@ -116,6 +116,7 @@ class JnavApp(App[None]):
         fields: FieldManager,
         search: SearchEngine,
         state_file: Path | None = None,
+        follow: bool = False,
     ) -> None:
         super().__init__()
         self.register_theme(
@@ -139,6 +140,7 @@ class JnavApp(App[None]):
         self._state_file: Path | None = state_file
         self._detail_visible_on_load: bool = False
         self._show_selected_only_on_load: bool = False
+        self._start_following = follow
 
     @override
     def compose(self) -> ComposeResult:
@@ -150,6 +152,7 @@ class JnavApp(App[None]):
                     fields=self._fields,
                     search=self._search,
                     id="log-list",
+                    follow=self._start_following,
                 ),
                 FilterBar(id="filter-bar"),
                 id="log-panel",

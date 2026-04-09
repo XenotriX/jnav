@@ -66,11 +66,13 @@ class LogListView(VirtualListView[IndexedEntry]):
         fields: FieldManager,
         search: SearchEngine,
         id: str | None = None,
+        follow: bool,
     ) -> None:
         super().__init__(
             model=model,
             render_item=self._render_entry,
             id=id,
+            follow=follow,
         )
         self._log_model = model
         self._fields = fields
