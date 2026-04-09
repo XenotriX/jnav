@@ -26,9 +26,12 @@ class LogListView(VirtualListView[IndexedEntry]):
 
     COMPONENT_CLASSES = {
         "summary--level-error",
+        "summary--level-fatal",
+        "summary--level-critical",
         "summary--level-warning",
         "summary--level-info",
         "summary--level-debug",
+        "summary--level-trace",
         "summary--text",
         "summary--search-highlight",
         "summary--cursor",
@@ -50,9 +53,12 @@ class LogListView(VirtualListView[IndexedEntry]):
         height: 1fr;
         background: $surface;
         & > .summary--level-error { color: $error; text-style: bold; }
+        & > .summary--level-fatal { color: $error; text-style: bold; }
+        & > .summary--level-critical { color: $error; text-style: bold; }
         & > .summary--level-warning { color: $warning; text-style: bold; }
         & > .summary--level-info { color: $primary; text-style: bold; }
         & > .summary--level-debug { color: $success; text-style: bold; }
+        & > .summary--level-trace { color: $success; text-style: bold; }
         & > .summary--text { color: $foreground; }
         & > .summary--cursor { background: $primary 30%; }
         & > .tree--background { background: $surface-darken-1; }

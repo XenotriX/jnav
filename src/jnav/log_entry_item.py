@@ -13,13 +13,13 @@ from .tree_rendering import highlight_text
 
 LEVEL_COMPONENTS = {
     "error": "summary--level-error",
-    "fatal": "summary--level-error",
-    "critical": "summary--level-error",
+    "fatal": "summary--level-fatal",
+    "critical": "summary--level-critical",
     "warn": "summary--level-warning",
     "warning": "summary--level-warning",
     "info": "summary--level-info",
     "debug": "summary--level-debug",
-    "trace": "summary--level-debug",
+    "trace": "summary--level-trace",
 }
 
 _EPOCH_DIVISORS: dict[TimestampFormat, int] = {
