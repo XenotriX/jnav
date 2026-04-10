@@ -7,13 +7,14 @@ import tempfile
 from typing import TYPE_CHECKING, Literal, TypedDict
 
 from rich.text import Text
-from textual.binding import Binding, BindingsMap
+from textual.binding import Binding
 from textual.events import Key
 from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
 
 from .field_manager import FieldManager
 from .filter_provider import FilterProvider
+from .key_sequences import KeySequence, KeySequenceMixin
 from .filtering import get_nested, jq_value_literal, resolve_selected_paths
 from .parsing import ParsedEntry
 from .search_engine import SearchEngine
@@ -60,7 +61,7 @@ def _format_timestamp(value: str) -> str:
         return str(value)
 
 
-class DetailTree(Tree[TreeNodeData]):
+class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
     COMPONENT_CLASSES = {
         "tree--key",
         "tree--key-selected",
@@ -75,8 +76,6 @@ class DetailTree(Tree[TreeNodeData]):
     if TYPE_CHECKING:
         app = getters.app(App[None])
 
-    _saved_bindings: BindingsMap | None = None
-
     BINDINGS = [
         Binding("j", "cursor_down", show=False),
         Binding("k", "cursor_up", show=False),
@@ -89,16 +88,15 @@ class DetailTree(Tree[TreeNodeData]):
         Binding("v", "view_value", "View"),
     ]
 
-    _LEADER_BINDINGS = [
-        Binding("f", "leader_filter_and", "Filter AND"),
-        Binding("o", "leader_filter_or", "Filter OR"),
-        Binding("n", "leader_has_and", "Has field AND"),
-        Binding("N", "leader_has_or", "Has field OR"),
-        Binding("escape", "leader_cancel", "Cancel", show=False),
+    SEQUENCES = [
+        KeySequence("ff", "filter_and", "Filter AND"),
+        KeySequence("fo", "filter_or", "Filter OR"),
+        KeySequence("fn", "has_and", "Has field AND"),
+        KeySequence("fN", "has_or", "Has field OR"),
     ]
+    SEQUENCE_GROUPS = {"f": "Filter..."}
 
     show_selected_only: bool = False
-    _leader_pending: bool = False
     _entry: ParsedEntry | None = None
     _entry_index: int = 0
 
@@ -191,53 +189,21 @@ class DetailTree(Tree[TreeNodeData]):
         )
         self.root.expand_all()
 
-    def action_leader_filter_and(self) -> None:
-        pass
-
-    def action_leader_filter_or(self) -> None:
-        pass
-
-    def action_leader_has_and(self) -> None:
-        pass
-
-    def action_leader_has_or(self) -> None:
-        pass
-
-    def action_leader_cancel(self) -> None:
-        pass
-
     async def on_key(self, event: Key) -> None:
-        if self._leader_pending:
-            self._leader_pending = False
-            event.prevent_default()
-            event.stop()
-            key = event.key
-            if key == "f":
-                await self._do_filter("and")
-            elif key == "o":
-                await self._do_filter("or")
-            elif key == "n":
-                await self._do_presence_filter("and")
-            elif key == "N":
-                await self._do_presence_filter("or")
-            self._restore_bindings()
+        if await self._handle_sequence_key(event):
             return
-        if event.key == "f":
-            self._leader_pending = True
-            event.prevent_default()
-            event.stop()
-            self._show_leader_bindings()
 
-    def _show_leader_bindings(self) -> None:
-        self._saved_bindings = self._bindings
-        self._bindings = BindingsMap(self._LEADER_BINDINGS)
-        self.refresh_bindings()
+    async def action_filter_and(self) -> None:
+        await self._do_filter("and")
 
-    def _restore_bindings(self) -> None:
-        if self._saved_bindings is not None:
-            self._bindings = self._saved_bindings
-            del self._saved_bindings
-        self.refresh_bindings()
+    async def action_filter_or(self) -> None:
+        await self._do_filter("or")
+
+    async def action_has_and(self) -> None:
+        await self._do_presence_filter("and")
+
+    async def action_has_or(self) -> None:
+        await self._do_presence_filter("or")
 
     def action_toggle_filter_tree(self) -> None:
         self.show_selected_only = not self.show_selected_only

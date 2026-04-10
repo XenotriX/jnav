@@ -12,7 +12,6 @@ from textual.widgets import Footer, Header, Static
 
 from jnav.field_manager import FieldManager
 from jnav.field_manager_screen import FieldManagerScreen
-from jnav.field_mapping import FieldMapping
 from jnav.filter_manager_screen import FilterManagerScreen
 from jnav.filter_provider import FilterProvider
 from jnav.help_screen import HelpScreen
