@@ -10,7 +10,7 @@ from textual.widgets import Input, OptionList, Static
 from textual.widgets.option_list import Option
 
 from jnav.filter_provider import FilterProvider
-from jnav.filtering import check_filter_warning
+from jnav.filtering import build_combined_expression, check_filter_warning
 from jnav.manager_screen_common import list_option_prompt
 
 
@@ -35,6 +35,15 @@ class FilterManagerScreen(ModalScreen[bool]):
     }
     #filter-add-input {
         margin: 1 0 0 0;
+    }
+    #filter-expression {
+        color: $accent;
+        margin: 0 0 1 0;
+        height: auto;
+        max-height: 3;
+    }
+    #filter-expression.empty {
+        color: $text-muted;
     }
     #filter-add-input.hidden {
         display: none;
@@ -62,6 +71,7 @@ class FilterManagerScreen(ModalScreen[bool]):
     @override
     def compose(self) -> ComposeResult:
         yield Vertical(
+            Static(id="filter-expression"),
             OptionList(id="filter-list"),
             Input(
                 placeholder="jq expression...", id="filter-add-input", classes="hidden"
@@ -80,6 +90,16 @@ class FilterManagerScreen(ModalScreen[bool]):
 
     def _refresh_list(self, highlight: int | None = None) -> None:
         filters = self._fp.get_filters()
+
+        expr_widget = self.query_one("#filter-expression", Static)
+        expr = build_combined_expression(filters)
+        if expr:
+            expr_widget.update(f"jq: {expr}")
+            expr_widget.remove_class("empty")
+        else:
+            expr_widget.update("jq: (no active filters)")
+            expr_widget.add_class("empty")
+
         ol = self.query_one("#filter-list", OptionList)
         ol.clear_options()
         if not filters:

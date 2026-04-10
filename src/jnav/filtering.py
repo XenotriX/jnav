@@ -37,24 +37,33 @@ def apply_jq_filter(
     return matched, None
 
 
+def build_combined_expression(filters: list[Filter]) -> str | None:
+    """Build a single jq expression from the enabled filters, or None if empty."""
+    enabled = [f for f in filters if f["enabled"]]
+    if not enabled:
+        return None
+    and_exprs = [f["expr"] for f in enabled if f.get("combine", "and") == "and"]
+    or_exprs = [f["expr"] for f in enabled if f.get("combine") == "or"]
+    parts: list[str] = []
+    if and_exprs:
+        parts.append(" and ".join(and_exprs))
+    if or_exprs:
+        parts.append(" or ".join(or_exprs))
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0]
+    return " or ".join(f"({p})" if " " in p else p for p in parts)
+
+
 def apply_combined_filters(
     filters: list[Filter],
     entries: list[dict[str, Any]],
 ) -> tuple[list[int], str | None]:
     """Apply all enabled filters (AND group unioned with OR group)."""
-    enabled = [f for f in filters if f["enabled"]]
-    if not enabled:
+    combined = build_combined_expression(filters)
+    if combined is None:
         return list(range(len(entries))), None
-    and_exprs = [f["expr"] for f in enabled if f.get("combine", "and") == "and"]
-    or_exprs = [f["expr"] for f in enabled if f.get("combine") == "or"]
-    parts: list[str] = []
-    if and_exprs:
-        parts.append(" and ".join(f"({e})" for e in and_exprs))
-    if or_exprs:
-        parts.append(" or ".join(f"({e})" for e in or_exprs))
-    if not parts:
-        return list(range(len(entries))), None
-    combined = " or ".join(f"({p})" for p in parts)
     return apply_jq_filter(combined, entries)
 
 
