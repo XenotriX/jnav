@@ -135,10 +135,9 @@ def get_nested(entry: dict[str, Any], path: str) -> object:
     wrapped = f"[{jq_path}]" if "[]" in path else jq_path
     try:
         prog = _compile_jq(wrapped)
-        result = prog.input_value(entry).first()
-        return result if result is not None else ""
+        return prog.input_value(entry).first()
     except Exception:
-        return ""
+        return None
 
 
 def jq_value_literal(value: object) -> str:

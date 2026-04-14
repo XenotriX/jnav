@@ -43,7 +43,15 @@ def render_inline_tree(
     if not custom_fields:
         return None
     _default = Style()
-    filtered = {f: get_nested(parsed.expanded, f) for f in custom_fields}
+    values = [(f, get_nested(parsed.expanded, f)) for f in custom_fields]
+
+    # Filter out selectors with no matches
+    filtered = {f: v for f, v in values if v is not None}
+
+    # Don't render the tree if there are no selectors with matches
+    if not filtered:
+        return None
+
     tree = RichTree("", guide_style="dim", hide_root=True)
     visitor = TreeBuildVisitor(
         root=tree,
