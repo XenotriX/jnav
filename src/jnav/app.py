@@ -92,7 +92,7 @@ class JnavApp(App[None]):
 
     BINDINGS = [
         Binding("F", "open_filters", "Filters \uf0c9"),
-        Binding("P", "open_columns", "Properties \uf0c9"),
+        Binding("S", "open_columns", "Selectors \uf0c9"),
         Binding("d", "toggle_detail", "Toggle Detail"),
         Binding("r", "reset", "Reset"),
         Binding("question_mark", "show_help", "Help", key_display="?"),

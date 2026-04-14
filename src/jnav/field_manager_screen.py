@@ -64,7 +64,7 @@ class FieldManagerScreen(ModalScreen[bool]):
         yield Vertical(
             OptionList(id="field-list"),
             Input(
-                placeholder="property path (e.g. data.role)...",
+                placeholder="jq selector (e.g. .data.role)...",
                 id="field-add-input",
                 classes="hidden",
             ),
@@ -76,7 +76,7 @@ class FieldManagerScreen(ModalScreen[bool]):
         )
 
     def on_mount(self) -> None:
-        self.query_one("#field-modal").border_title = "Properties"
+        self.query_one("#field-modal").border_title = "Selectors"
         self._refresh_list()
         self.query_one("#field-list", OptionList).focus()
 
@@ -86,7 +86,7 @@ class FieldManagerScreen(ModalScreen[bool]):
         ol.clear_options()
         if not fields:
             ol.add_option(
-                Option(Text(" (no properties selected)", style="dim"), disabled=True)
+                Option(Text(" (no selectors)", style="dim"), disabled=True)
             )
         else:
             for f in fields:

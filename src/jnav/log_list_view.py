@@ -53,9 +53,9 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         KeySequence("gg", "jump_top", "jump to top"),
         KeySequence("ft", "text_filter", "text filter"),
         KeySequence("fp", "toggle_filters_pause", "pause filters"),
-        KeySequence("pi", "toggle_expanded", "toggle inline tree"),
+        KeySequence("vi", "toggle_expanded", "toggle inline tree"),
     ]
-    SEQUENCE_GROUPS = {"f": "filter ▸", "p": "properties ▸"}
+    SEQUENCE_GROUPS = {"f": "filter ▸", "v": "view ▸"}
 
     DEFAULT_CSS = """
     LogListView {

@@ -87,10 +87,10 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
     SEQUENCES = [
         KeySequence("ff", "filter_value", "by value"),
         KeySequence("fn", "filter_has", "has field"),
-        KeySequence("po", "toggle_filter_tree", "show selected only"),
-        KeySequence("pe", "view_value", "open in editor"),
+        KeySequence("vo", "toggle_filter_tree", "show selected only"),
+        KeySequence("ve", "view_value", "open in editor"),
     ]
-    SEQUENCE_GROUPS = {"f": "filter ▸", "p": "properties ▸"}
+    SEQUENCE_GROUPS = {"f": "filter ▸", "v": "view ▸"}
 
     show_selected_only: bool = False
     _entry: ParsedEntry | None = None
