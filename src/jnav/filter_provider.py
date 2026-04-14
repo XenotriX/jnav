@@ -2,12 +2,7 @@ from typing import Any, Literal
 
 from aioreactive import AsyncSubject
 
-from jnav.filtering import (
-    FilterGroup,
-    Filter,
-    FilterNode,
-    build_expression,
-)
+from jnav.filtering import Filter, FilterGroup, FilterNode, build_expression
 
 
 class FilterProvider:
@@ -29,15 +24,16 @@ class FilterProvider:
     ) -> None:
         """Add a new filter leaf to the root group."""
         existing = {
-            leaf.expr
-            for leaf in self._root.children
-            if isinstance(leaf, Filter)
+            leaf.expr for leaf in self._root.children if isinstance(leaf, Filter)
         }
         if expr not in existing:
             leaf = Filter(expr=expr, label=label)
             if combine == "or":
                 self._root.children.append(
-                    FilterGroup(operator="or", children=[leaf])
+                    FilterGroup(
+                        operator="or",
+                        children=[leaf],
+                    )
                 )
             else:
                 self._root.children.append(leaf)

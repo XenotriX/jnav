@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import datetime, timezone
 
 from rich.style import Style
@@ -43,7 +41,7 @@ def format_timestamp(value: object, fmt: TimestampFormat) -> str:
                 float(value) / _EPOCH_DIVISORS[fmt], tz=timezone.utc
             )
         return dt.strftime("%H:%M:%S") + f".{dt.microsecond // 1000:03d}"
-    except (ValueError, TypeError, OSError, OverflowError):
+    except ValueError, TypeError, OSError, OverflowError:
         return str(value)
 
 

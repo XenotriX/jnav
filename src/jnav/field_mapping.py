@@ -134,4 +134,3 @@ def _epoch_format_from_magnitude(value: float) -> TimestampFormat:
     if magnitude < 1e17:
         return "epoch_us"
     return "epoch_ns"
-

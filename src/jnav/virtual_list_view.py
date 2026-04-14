@@ -283,7 +283,8 @@ class VirtualListView(Widget, Generic[T], can_focus=True):
 
     def action_select(self) -> None:
         if not self._model.is_empty():
-            self.post_message(self.Selected(self, self.index, self._model.get(self.index)))
+            msg = self.Selected(self, self.index, self._model.get(self.index))
+            self.post_message(msg)
 
     def _render_and_measure(self, index: int) -> int:
         renderable = self._render_item(self._model.get(index), index)

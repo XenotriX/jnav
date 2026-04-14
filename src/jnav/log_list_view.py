@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from bisect import bisect_left
 from typing import TYPE_CHECKING, ClassVar, override
 

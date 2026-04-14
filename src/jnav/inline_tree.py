@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from rich.style import Style
 from rich.text import Text
 from rich.tree import Tree as RichTree

@@ -290,13 +290,11 @@ class TestSetMapping:
 class TestKnownFormats:
     @pytest.mark.asyncio
     async def test_logstash_style(self, fm: FieldManager) -> None:
-        await fm.discover_from_entry(
-            {
-                "@timestamp": "2025-01-01T00:00:00",
-                "level": "INFO",
-                "message": "hello",
-            }
-        )
+        await fm.discover_from_entry({
+            "@timestamp": "2025-01-01T00:00:00",
+            "level": "INFO",
+            "message": "hello",
+        })
         assert fm.mapping.timestamp == TimestampField(
             path="@timestamp", format="iso8601"
         )
@@ -305,57 +303,59 @@ class TestKnownFormats:
 
     @pytest.mark.asyncio
     async def test_bunyan_style(self, fm: FieldManager) -> None:
-        await fm.discover_from_entry(
-            {"time": "2025-01-01T00:00:00", "level": 30, "msg": "hi"}
-        )
+        await fm.discover_from_entry({
+            "time": "2025-01-01T00:00:00",
+            "level": 30,
+            "msg": "hi",
+        })
         assert fm.mapping.timestamp == TimestampField(path="time", format="iso8601")
         assert fm.mapping.level == "level"
         assert fm.mapping.message == "msg"
 
     @pytest.mark.asyncio
     async def test_pino_epoch_ms(self, fm: FieldManager) -> None:
-        await fm.discover_from_entry(
-            {"time": 1_700_000_000_000, "level": 30, "msg": "hi"}
-        )
+        await fm.discover_from_entry({
+            "time": 1_700_000_000_000,
+            "level": 30,
+            "msg": "hi",
+        })
         assert fm.mapping.timestamp == TimestampField(path="time", format="epoch_ms")
 
     @pytest.mark.asyncio
     async def test_zap_ts(self, fm: FieldManager) -> None:
-        await fm.discover_from_entry(
-            {"ts": "2025-01-01T00:00:00", "level": "info", "msg": "hi"}
-        )
+        await fm.discover_from_entry({
+            "ts": "2025-01-01T00:00:00",
+            "level": "info",
+            "msg": "hi",
+        })
         assert fm.mapping.timestamp == TimestampField(path="ts", format="iso8601")
 
     @pytest.mark.asyncio
     async def test_serilog_style(self, fm: FieldManager) -> None:
-        await fm.discover_from_entry(
-            {"@t": "2025-01-01T00:00:00", "@l": "Warning", "@m": "hi"}
-        )
+        await fm.discover_from_entry({
+            "@t": "2025-01-01T00:00:00",
+            "@l": "Warning",
+            "@m": "hi",
+        })
         assert fm.mapping.timestamp == TimestampField(path="@t", format="iso8601")
         assert fm.mapping.level == "@l"
         assert fm.mapping.message == "@m"
 
     @pytest.mark.asyncio
-    async def test_priority_prefers_earlier_candidate(
-        self, fm: FieldManager
-    ) -> None:
-        await fm.discover_from_entry(
-            {
-                "@timestamp": "2025-01-01T00:00:00",
-                "ts": "2025-01-01T00:00:00",
-                "time": "2025-01-01T00:00:00",
-                "level": "INFO",
-                "message": "hi",
-            }
-        )
+    async def test_priority_prefers_earlier_candidate(self, fm: FieldManager) -> None:
+        await fm.discover_from_entry({
+            "@timestamp": "2025-01-01T00:00:00",
+            "ts": "2025-01-01T00:00:00",
+            "time": "2025-01-01T00:00:00",
+            "level": "INFO",
+            "message": "hi",
+        })
         # @timestamp has higher priority than ts/time
         assert fm.mapping.timestamp is not None
         assert fm.mapping.timestamp.path == "@timestamp"
 
     @pytest.mark.asyncio
-    async def test_unknown_format_leaves_mapping_empty(
-        self, fm: FieldManager
-    ) -> None:
+    async def test_unknown_format_leaves_mapping_empty(self, fm: FieldManager) -> None:
         await fm.discover_from_entry({"weird": "2025-01-01", "value": 42})
         assert fm.mapping == FieldMapping()
 

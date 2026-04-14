@@ -22,13 +22,11 @@ class TestRxPipe:
     @pytest.mark.asyncio
     async def test_pipe_parses_and_filters(self) -> None:
         """The rx.pipe chain should parse lines, drop errors, and preprocess."""
-        lines = fake_line_reader(
-            [
-                '{"level": "INFO", "msg": "ok"}',
-                "not-json",
-                '{"level": "ERROR", "msg": "fail"}',
-            ]
-        )
+        lines = fake_line_reader([
+            '{"level": "INFO", "msg": "ok"}',
+            "not-json",
+            '{"level": "ERROR", "msg": "fail"}',
+        ])
 
         pipe = rx.pipe(
             rx.from_async_iterable(lines),

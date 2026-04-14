@@ -301,9 +301,7 @@ class SelectedCapture(App[None]):
         )
         yield vl
 
-    def on_virtual_list_view_selected(
-        self, event: VirtualListView.Selected
-    ) -> None:
+    def on_virtual_list_view_selected(self, event: VirtualListView.Selected) -> None:
         self.selected.append(event)
 
 
