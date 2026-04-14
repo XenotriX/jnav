@@ -130,35 +130,15 @@ def _is_truthy(value: object) -> bool:
     return True
 
 
-_PATH_SEGMENT_RE = re.compile(r"([^.\[\]]+)|\[(\d+)\]")
-
-
 def get_nested(entry: dict[str, Any], path: str) -> object:
-    # Paths with [] (iterator) need jq
-    if "[]" in path:
-        jq_path = "." + path if not path.startswith(".") else path
-        # Convert dotted paths to jq syntax: a.b[].c → .a.b[].c
-        try:
-            prog = jq.compile(f"[{jq_path}]")
-            result = prog.input_value(entry).first()
-            return result if result else ""
-        except Exception:
-            return ""
-    obj = entry
-    for match in _PATH_SEGMENT_RE.finditer(path):
-        key, idx = match.group(1), match.group(2)
-        if key is not None:
-            if isinstance(obj, dict):
-                obj = obj.get(key, "")
-            else:
-                return ""
-        else:
-            i = int(idx)
-            if isinstance(obj, list) and i < len(obj):
-                obj = obj[i]
-            else:
-                return ""
-    return obj
+    jq_path = path if path.startswith(".") else "." + path
+    wrapped = f"[{jq_path}]" if "[]" in path else jq_path
+    try:
+        prog = _compile_jq(wrapped)
+        result = prog.input_value(entry).first()
+        return result if result is not None else ""
+    except Exception:
+        return ""
 
 
 def jq_value_literal(value: object) -> str:
