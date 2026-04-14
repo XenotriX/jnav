@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 from bisect import bisect_left
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from rich.console import RenderableType
 from rich.style import Style
 from textual.binding import Binding
+from textual.events import Key
 
 from .field_manager import FieldManager
+from .filter_provider import FilterProvider
+from .filtering import text_search_expr
+from .key_sequences import KeySequence, KeySequenceMixin
 from .log_entry_item import LEVEL_COMPONENTS
 from .log_entry_renderer import EntryStyles, LogEntryRenderer
 from .log_model import LogModel
 from .search_engine import SearchEngine
 from .store import IndexedEntry
+from .text_input_screen import TextInputScreen
 from .virtual_list_view import VirtualListView
 
 if TYPE_CHECKING:
@@ -20,7 +25,7 @@ if TYPE_CHECKING:
     from textual.app import App
 
 
-class LogListView(VirtualListView[IndexedEntry]):
+class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
     if TYPE_CHECKING:
         app = getters.app(App[None])
 
@@ -44,9 +49,15 @@ class LogListView(VirtualListView[IndexedEntry]):
         "tree--background",
     }
 
-    BINDINGS = [
-        Binding("e", "toggle_expanded", "Expand"),
+    BINDINGS: ClassVar[list[Binding]] = []
+
+    SEQUENCES = [
+        KeySequence("gg", "jump_top", "jump to top"),
+        KeySequence("ft", "text_filter", "text filter"),
+        KeySequence("fp", "toggle_filters_pause", "pause filters"),
+        KeySequence("pi", "toggle_expanded", "toggle inline tree"),
     ]
+    SEQUENCE_GROUPS = {"f": "filter ▸", "p": "properties ▸"}
 
     DEFAULT_CSS = """
     LogListView {
@@ -71,6 +82,7 @@ class LogListView(VirtualListView[IndexedEntry]):
         model: LogModel,
         fields: FieldManager,
         search: SearchEngine,
+        filter_provider: FilterProvider,
         id: str | None = None,
         follow: bool,
     ) -> None:
@@ -83,6 +95,7 @@ class LogListView(VirtualListView[IndexedEntry]):
         self._log_model = model
         self._fields = fields
         self._search = search
+        self._filter_provider = filter_provider
         self._expanded_mode: bool = True
         self._renderer = LogEntryRenderer(
             search=search,
@@ -141,7 +154,6 @@ class LogListView(VirtualListView[IndexedEntry]):
 
     @override
     async def on_mount(self) -> None:
-        await super().on_mount()
         await self._log_model.on_append.subscribe_async(self._on_append_discover)
         await self._log_model.on_will_rebuild.subscribe_async(self._on_will_rebuild)
         await self._log_model.on_rebuild.subscribe_async(self._on_rebuild)
@@ -150,6 +162,7 @@ class LogListView(VirtualListView[IndexedEntry]):
 
     async def _on_fields_or_search_changed(self, _: None) -> None:
         self.refresh()
+        self.refresh_bindings()
 
     def on_focus(self) -> None:
         if self.parent is not None:
@@ -232,5 +245,37 @@ class LogListView(VirtualListView[IndexedEntry]):
         after = indices[pos] - store_idx
         return pos if after < before else pos - 1
 
+    async def on_key(self, event: Key) -> None:
+        if await self._handle_sequence_key(event):
+            return
+
+    @override
+    def check_action(
+        self,
+        action: str,
+        parameters: tuple[object, ...],
+    ) -> bool | None:
+        del parameters  # unused
+        if action == "toggle_expanded":
+            return bool(self._fields.active_fields)
+        return True
+
     def action_toggle_expanded(self) -> None:
         self.set_expanded_mode(not self._expanded_mode)
+
+    def action_text_filter(self) -> None:
+        async def on_dismiss(term: str | None) -> None:
+            if term:
+                expr = text_search_expr(term)
+                await self._filter_provider.add_filter(expr, label=f"text: {term}")
+
+        self.app.push_screen(TextInputScreen("Text filter"), on_dismiss)
+
+    async def action_toggle_filters_pause(self) -> None:
+        if not self._filter_provider.root.children:
+            return
+        await self._log_model.set_filtering_enabled(
+            not self._log_model.filtering_enabled
+        )
+        state = "active" if self._log_model.filtering_enabled else "paused"
+        self.app.notify(f"Filters {state}", timeout=2)

@@ -7,38 +7,35 @@ from textual.widgets import Static
 
 
 HELP_TEXT = """\
-[b]Global[/b]
-  [b]j/k[/b]       Navigate entries (or arrow keys)
-  [b]h/l[/b]       Switch focus: list ↔ detail
-  [b]Ctrl+D/U[/b]  Half-page scroll down/up
-  [b]/[/b]         Search (highlight matches, n/N to navigate)
-  [b]n/N[/b]       Next/previous search match
-  [b]f[/b]         Manage filters (hide non-matching entries)
-  [b]c[/b]         Manage selected fields
-  [b]Ctrl+F[/b]    Add text filter (AND)
-  [b]Ctrl+S[/b]    Add text filter (OR)
-  [b]space[/b]     Pause/unpause filters
-  [b]e[/b]         Toggle expanded view
+[b]Navigation[/b]
+  [b]j/k[/b]       Cursor down/up
+  [b]gg/G[/b]      Jump to top/bottom
+  [b]Ctrl+D/U[/b]  Half-page down/up
+  [b]h/l[/b]       Focus list/detail
+  [b]Enter[/b]     Inspect entry
+  [b]Escape[/b]    Back
+
+[b]Actions[/b]
+  [b]/[/b]         Search
+  [b]n/N[/b]       Next/prev match
+  [b]F[/b]         Filter manager
+  [b]ft[/b]        Text filter
+  [b]fp[/b]        Pause/resume filters
+  [b]S[/b]         Selected fields manager
+  [b]s[/b]         (Un)select field
+  [b]c[/b]         Collapse/expand entries
   [b]d[/b]         Toggle detail panel
-  [b]r[/b]         Reset all filters, fields, and search
-  [b]y[/b]         Copy current entry as JSON
-  [b]g[/b]         Jump to first entry
-  [b]G[/b]         Jump to last entry
+  [b]r[/b]         Reset filters, fields, search
+  [b]y[/b]         Copy entry as JSON
   [b]?[/b]         This help
   [b]q[/b]         Quit
 
-[b]Table / Expanded View[/b]
-  [b]Enter[/b]     Open detail panel and inspect entry
-
 [b]Detail Panel[/b]
-  [b]f f[/b]       Filter by value (AND)
-  [b]f o[/b]       Filter by value (OR)
-  [b]f n[/b]       Has field (AND)
-  [b]f N[/b]       Has field (OR)
-  [b]s[/b]         Select this field for display
+  [b]ff[/b]        Filter by value
+  [b]fn[/b]        Has field
+  [b]s[/b]         (Un)select field
   [b]v[/b]         View value in $EDITOR
-  [b]t[/b]         Toggle: show only selected fields
-  [b]Escape[/b]    Return to main view
+  [b]t[/b]         Show selected fields only
 """
 
 
@@ -64,6 +61,8 @@ class HelpScreen(ModalScreen[bool]):
 
     BINDINGS = [
         Binding("escape", "close", "Close", priority=True),
+        Binding("q", "close", show=False),
+        Binding("ctrl+c", "close", show=False),
         Binding("question_mark", "close", show=False),
     ]
 

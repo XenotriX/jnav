@@ -84,7 +84,6 @@ class VirtualListView(Widget, Generic[T], can_focus=True):
         Binding("k", "cursor_up", show=False),
         Binding("ctrl+d", "scroll_half_down", show=False),
         Binding("ctrl+u", "scroll_half_up", show=False),
-        Binding("g", "jump_top", show=False),
         Binding("G", "jump_bottom", show=False),
         Binding("enter", "select"),
     ]

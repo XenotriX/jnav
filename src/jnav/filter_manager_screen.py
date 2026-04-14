@@ -44,6 +44,8 @@ class FilterManagerScreen(ModalScreen[bool]):
 
     BINDINGS = [
         Binding("escape", "maybe_close", "Close", priority=True),
+        Binding("q", "maybe_close", show=False),
+        Binding("ctrl+c", "maybe_close", show=False),
     ]
 
     def __init__(self, filter_provider: FilterProvider) -> None:

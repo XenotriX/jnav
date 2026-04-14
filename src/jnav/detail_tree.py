@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 import tempfile
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from rich.text import Text
 from textual.binding import Binding
@@ -83,18 +83,16 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         Binding("G", "scroll_end", show=False),
         Binding("ctrl+d", "page_down", show=False),
         Binding("ctrl+u", "page_up", show=False),
-        Binding("s", "add_select", "(Un)select"),
-        Binding("t", "toggle_filter_tree", "Selected only"),
-        Binding("v", "view_value", "View"),
+        Binding("s", "add_select", "Select"),
     ]
 
     SEQUENCES = [
-        KeySequence("ff", "filter_and", "Filter AND"),
-        KeySequence("fo", "filter_or", "Filter OR"),
-        KeySequence("fn", "has_and", "Has field AND"),
-        KeySequence("fN", "has_or", "Has field OR"),
+        KeySequence("ff", "filter_value", "by value"),
+        KeySequence("fn", "filter_has", "has field"),
+        KeySequence("po", "toggle_filter_tree", "show selected only"),
+        KeySequence("pe", "view_value", "open in editor"),
     ]
-    SEQUENCE_GROUPS = {"f": "Filter..."}
+    SEQUENCE_GROUPS = {"f": "filter ▸", "p": "properties ▸"}
 
     show_selected_only: bool = False
     _entry: ParsedEntry | None = None
@@ -193,23 +191,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         if await self._handle_sequence_key(event):
             return
 
-    async def action_filter_and(self) -> None:
-        await self._do_filter("and")
-
-    async def action_filter_or(self) -> None:
-        await self._do_filter("or")
-
-    async def action_has_and(self) -> None:
-        await self._do_presence_filter("and")
-
-    async def action_has_or(self) -> None:
-        await self._do_presence_filter("or")
-
-    def action_toggle_filter_tree(self) -> None:
-        self.show_selected_only = not self.show_selected_only
-        self._rebuild_tree()
-
-    async def _do_filter(self, combine: Literal["and", "or"]) -> None:
+    async def action_filter_value(self) -> None:
         node = self.cursor_node
         if node is None or node.data is None:
             return
@@ -218,14 +200,18 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         if isinstance(value, (dict, list)):
             return
         expr = f".{path} == {jq_value_literal(value)}"
-        await self._filters.add_filter(expr, combine=combine)
+        await self._filters.add_filter(expr)
 
-    async def _do_presence_filter(self, combine: Literal["and", "or"]) -> None:
+    async def action_filter_has(self) -> None:
         node = self.cursor_node
         if node is None or node.data is None:
             return
         path = node.data["path"]
-        await self._filters.add_filter(f".{path} != null", combine=combine)
+        await self._filters.add_filter(f".{path} != null")
+
+    def action_toggle_filter_tree(self) -> None:
+        self.show_selected_only = not self.show_selected_only
+        self._rebuild_tree()
 
     async def action_add_select(self) -> None:
         node = self.cursor_node

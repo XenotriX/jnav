@@ -46,10 +46,12 @@ class FieldManagerScreen(ModalScreen[bool]):
 
     BINDINGS = [
         Binding("escape", "maybe_close", "Close", priority=True),
+        Binding("q", "maybe_close", show=False),
+        Binding("ctrl+c", "maybe_close", show=False),
         Binding("a", "add_mode", "Add", show=False),
         Binding("e", "edit_mode", "Edit", show=False),
         Binding("d", "delete", "Delete", show=False),
-        Binding("space", "toggle_item", "Toggle", show=False),
+        Binding("t", "toggle_item", "Toggle", show=False),
     ]
 
     def __init__(self, field_manager: FieldManager) -> None:
@@ -62,7 +64,7 @@ class FieldManagerScreen(ModalScreen[bool]):
         yield Vertical(
             OptionList(id="field-list"),
             Input(
-                placeholder="field path (e.g. data.role)...",
+                placeholder="property path (e.g. data.role)...",
                 id="field-add-input",
                 classes="hidden",
             ),
@@ -74,7 +76,7 @@ class FieldManagerScreen(ModalScreen[bool]):
         )
 
     def on_mount(self) -> None:
-        self.query_one("#field-modal").border_title = "Fields"
+        self.query_one("#field-modal").border_title = "Properties"
         self._refresh_list()
         self.query_one("#field-list", OptionList).focus()
 
@@ -84,7 +86,7 @@ class FieldManagerScreen(ModalScreen[bool]):
         ol.clear_options()
         if not fields:
             ol.add_option(
-                Option(Text(" (no fields selected)", style="dim"), disabled=True)
+                Option(Text(" (no properties selected)", style="dim"), disabled=True)
             )
         else:
             for f in fields:

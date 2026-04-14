@@ -24,6 +24,7 @@ class TextInputScreen(ModalScreen[str | None]):
 
     BINDINGS = [
         Binding("escape", "close", "Close", priority=True),
+        Binding("ctrl+c", "close", show=False),
     ]
 
     def __init__(

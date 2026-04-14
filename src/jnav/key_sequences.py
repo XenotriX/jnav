@@ -9,6 +9,13 @@ if TYPE_CHECKING:
     from textual.events import Key
 
 
+# pyright: reportUninitializedInstanceVariable=false
+# pyright: reportAttributeAccessIssue=false
+# pyright: reportUnknownMemberType=false
+# pyright: reportUnknownVariableType=false
+# pyright: reportUnknownArgumentType=false
+
+
 @dataclass(frozen=True)
 class KeySequence:
     keys: str
@@ -46,12 +53,13 @@ class KeySequenceMixin:
     _seq_buffer: str = ""
     _seq_pending: bool = False
     _seq_saved_bindings: BindingsMap | None = None
+    _seq_saved_ancestor_bindings: list[tuple[object, BindingsMap]] = []  # noqa: RUF012
     _seq_keymap: dict[str, str] = {}  # noqa: RUF012
     _seq_lookup: dict[str, KeySequence] = {}  # noqa: RUF012
     _seq_prefixes: dict[str, str] = {}  # noqa: RUF012
     _seq_base_bindings: BindingsMap | None = None
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
         self._seq_buffer = ""
         self._seq_pending = False
         self._seq_saved_bindings = None
@@ -63,7 +71,7 @@ class KeySequenceMixin:
             self._seq_pending = False
             self._seq_buffer = ""
             if self._seq_saved_bindings is not None:
-                self._bindings = self._seq_saved_bindings  # pyright: ignore[reportUninitializedInstanceVariable]
+                self._bindings = self._seq_saved_bindings
                 self._seq_saved_bindings = None
 
         self._seq_lookup = self._build_seq_lookup()
@@ -97,12 +105,24 @@ class KeySequenceMixin:
         return prefixes
 
     def _inject_prefix_bindings(self) -> None:
+        # Build prefix bindings first, then prepend them so they appear before
+        # the widget's own bindings in the footer.
+        prefix_entries: list[tuple[str, Binding]] = []
         for char, label in self._seq_prefixes.items():
             self._bindings.key_to_bindings.pop(char, None)
             if label:
-                self._bindings._add_binding(  # pyright: ignore[reportPrivateUsage]
-                    Binding(char, f"_seq_prefix_{char}", label)
-                )
+                prefix_entries.append((
+                    char,
+                    Binding(char, f"_seq_prefix_{char}", label),
+                ))
+        if not prefix_entries:
+            return
+        existing = dict(self._bindings.key_to_bindings)
+        self._bindings.key_to_bindings.clear()
+        for char, binding in prefix_entries:
+            self._bindings.key_to_bindings[char] = [binding]
+        for key, bindings in existing.items():
+            self._bindings.key_to_bindings[key] = bindings
 
     async def _handle_sequence_key(self, event: Key) -> bool:
         if self._seq_pending:
@@ -126,7 +146,7 @@ class KeySequenceMixin:
             if self._seq_buffer in self._seq_lookup:
                 seq = self._seq_lookup[self._seq_buffer]
                 self._reset_sequence()
-                await self.run_action(seq.action)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                await self.run_action(seq.action)
                 return True
 
             self._reset_sequence()
@@ -145,6 +165,7 @@ class KeySequenceMixin:
     def _show_continuations(self, prefix: str) -> None:
         if self._seq_saved_bindings is None:
             self._seq_saved_bindings = self._bindings
+            self._hide_ancestor_bindings()
 
         continuations: list[Binding] = []
         seen: set[str] = set()
@@ -163,7 +184,7 @@ class KeySequenceMixin:
                     )
         continuations.append(Binding("escape", "_seq_cancel", "Cancel", show=False))
         self._bindings = BindingsMap(continuations)
-        self.refresh_bindings()  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+        self.refresh_bindings()
 
     def _reset_sequence(self) -> None:
         self._seq_pending = False
@@ -171,9 +192,22 @@ class KeySequenceMixin:
         if self._seq_saved_bindings is not None:
             self._bindings = self._seq_saved_bindings
             self._seq_saved_bindings = None
-        self.refresh_bindings()  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+        self._restore_ancestor_bindings()
+        self.refresh_bindings()
+
+    def _hide_ancestor_bindings(self) -> None:
+        self._seq_saved_ancestor_bindings = []
+        for ancestor in self.ancestors_with_self[1:]:
+            if hasattr(ancestor, "_bindings"):
+                self._seq_saved_ancestor_bindings.append((ancestor, ancestor._bindings))
+                ancestor._bindings = BindingsMap([])
+
+    def _restore_ancestor_bindings(self) -> None:
+        for ancestor, bindings in self._seq_saved_ancestor_bindings:
+            ancestor._bindings = bindings
+        self._seq_saved_ancestor_bindings = []
 
     def set_sequence_keymap(self, keymap: dict[str, str]) -> None:
         self._seq_keymap = keymap
         self._rebuild_sequences()
-        self.refresh_bindings()  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+        self.refresh_bindings()

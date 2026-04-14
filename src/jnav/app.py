@@ -21,7 +21,6 @@ from jnav.text_input_screen import TextInputScreen
 from jnav.virtual_list_view import VirtualListView
 
 from .detail_tree import DetailTree
-from .filtering import text_search_expr
 from .log_list_view import LogListView
 from .store import IndexedEntry
 
@@ -45,6 +44,9 @@ class JnavApp(App[None]):
     }
     ModalScreen {
         background: $background 80%;
+    }
+    FooterKey {
+        margin: 0 1 0 0;
     }
     .tree--key { color: $primary; text-style: italic; }
     .tree--key-selected { color: $primary; text-style: bold underline; }
@@ -89,21 +91,17 @@ class JnavApp(App[None]):
     """
 
     BINDINGS = [
-        Binding("q", "quit", "Quit"),
-        Binding("slash", "start_search", "Search", key_display="/"),
-        Binding("f", "open_filters", "Filter"),
-        Binding("c", "open_columns", "Fields"),
-        Binding("ctrl+f", "text_filter", "Text filter"),
-        Binding("ctrl+s", "text_filter_or", "Text OR"),
-        Binding("d", "toggle_detail", "Detail"),
+        Binding("F", "open_filters", "Filters \uf0c9"),
+        Binding("P", "open_columns", "Properties \uf0c9"),
+        Binding("d", "toggle_detail", "Toggle Detail"),
         Binding("r", "reset", "Reset"),
-        Binding("y", "copy_entry", "Copy"),
+        Binding("question_mark", "show_help", "Help", key_display="?"),
+        Binding("q", "quit", "Quit", show=False),
+        Binding("slash", "start_search", "Search", key_display="/", show=False),
         Binding("h", "focus_list", show=False),
         Binding("l", "focus_detail", show=False),
         Binding("n", "search_next", show=False),
         Binding("N", "search_prev", show=False),
-        Binding("space", "toggle_filters_pause", show=False),
-        Binding("question_mark", "show_help", "?", key_display="?"),
         Binding("escape", "escape", show=False),
         Binding("enter", "inspect", "Inspect", show=False),
     ]
@@ -150,6 +148,7 @@ class JnavApp(App[None]):
                     model=self._model,
                     fields=self._fields,
                     search=self._search,
+                    filter_provider=self._filter_provider,
                     id="log-list",
                     follow=self._start_following,
                 ),
@@ -318,24 +317,6 @@ class JnavApp(App[None]):
                 return
         self.notify("No more matches", timeout=1)
 
-    def action_text_filter(self) -> None:
-        async def on_dismiss(term: str | None) -> None:
-            if term:
-                expr = text_search_expr(term)
-                await self._filter_provider.add_filter(expr, label=f"text: {term}")
-
-        self.push_screen(TextInputScreen("Text Filter (AND)"), on_dismiss)
-
-    def action_text_filter_or(self) -> None:
-        async def on_dismiss(term: str | None) -> None:
-            if term:
-                expr = text_search_expr(term)
-                await self._filter_provider.add_filter(
-                    expr, label=f"text: {term}", combine="or"
-                )
-
-        self.push_screen(TextInputScreen("Text Filter (OR)"), on_dismiss)
-
     def action_toggle_detail(self) -> None:
         panel = self.query_one("#detail-panel")
         if panel.display:
@@ -359,12 +340,6 @@ class JnavApp(App[None]):
         await self._filter_provider.clear_filters()
         self.notify("Filters and fields cleared", timeout=2)
 
-    def action_copy_entry(self) -> None:
-        tree = self.query_one("#detail-tree", DetailTree)
-        if tree.entry:
-            self.copy_to_clipboard(tree.entry.raw)
-            self.notify("Entry copied to clipboard", timeout=2)
-
     def action_focus_list(self) -> None:
         if self.query_one("#detail-panel").display:
             self.query_one("#log-list", LogListView).focus()
@@ -372,13 +347,6 @@ class JnavApp(App[None]):
     def action_focus_detail(self) -> None:
         if self.query_one("#detail-panel").display:
             self.query_one("#detail-tree", DetailTree).focus()
-
-    async def action_toggle_filters_pause(self) -> None:
-        if not self._filter_provider.root.children:
-            return
-        await self._model.set_filtering_enabled(not self._model.filtering_enabled)
-        state = "active" if self._model.filtering_enabled else "paused"
-        self.notify(f"Filters {state}", timeout=2)
 
     def action_show_help(self) -> None:
         self.push_screen(HelpScreen())
