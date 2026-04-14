@@ -10,12 +10,12 @@ from textual.events import Key
 from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
 
-from .field_manager import FieldManager
 from .filter_provider import FilterProvider
 from .key_sequences import KeySequence, KeySequenceMixin
 from .filtering import get_nested, jq_value_literal, resolve_selected_paths
 from .parsing import ParsedEntry
 from .search_engine import SearchEngine
+from .selector_provider import SelectorProvider
 from .tree_rendering import TreeBuildVisitor, walk_tree
 
 
@@ -100,13 +100,13 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         self,
         label: str,
         *,
-        fields: FieldManager,
+        selectors: SelectorProvider,
         filters: FilterProvider,
         search: SearchEngine,
         id: str | None = None,
     ) -> None:
         super().__init__(label, id=id)
-        self._fields = fields
+        self._selectors = selectors
         self._filters = filters
         self._search = search
 
@@ -119,7 +119,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
             self.parent.remove_class("focused")
 
     async def on_mount(self) -> None:  # pyright: ignore[reportIncompatibleMethodOverride, reportImplicitOverride]
-        await self._fields.on_change.subscribe_async(self._rerender)
+        await self._selectors.on_change.subscribe_async(self._rerender)
         await self._search.on_change.subscribe_async(self._rerender)
         self.app.theme_changed_signal.subscribe(self, lambda _: self._rebuild_tree())
 
@@ -139,7 +139,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         if self._entry is None:
             return
         entry = self._entry.expanded
-        selected = resolve_selected_paths(self._fields.active_fields, entry)
+        selected = resolve_selected_paths(self._selectors.active_selectors, entry)
 
         ts_val = None
         for ts_key in TS_KEYS:
@@ -155,7 +155,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         self.clear()
         self.root.set_label(label)
         data = (
-            {col: get_nested(entry, col) for col in self._fields.active_fields}
+            {s: get_nested(entry, s) for s in self._selectors.active_selectors}
             if self.show_selected_only
             else entry
         )
@@ -216,10 +216,10 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         if node is None or node.data is None:
             return
         path = node.data["path"]
-        if self._fields.has_field(path):
-            await self._fields.remove_field_by_path(path)
+        if self._selectors.has_selector(path):
+            await self._selectors.remove_selector_by_path(path)
         else:
-            await self._fields.add_field(path)
+            await self._selectors.add_selector(path)
 
     def action_view_value(self) -> None:
         node = self.cursor_node

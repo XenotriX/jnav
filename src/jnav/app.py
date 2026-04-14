@@ -10,13 +10,14 @@ from textual.containers import Horizontal, Vertical
 from textual.theme import Theme
 from textual.widgets import Footer, Header, Static
 
-from jnav.field_manager import FieldManager
-from jnav.field_manager_screen import FieldManagerScreen
+from jnav.role_mapper import RoleMapper
 from jnav.filter_manager_screen import FilterManagerScreen
 from jnav.filter_provider import FilterProvider
 from jnav.help_screen import HelpScreen
 from jnav.log_model import LogModel
 from jnav.search_engine import SearchEngine
+from jnav.selector_manager_screen import SelectorManagerScreen
+from jnav.selector_provider import SelectorProvider
 from jnav.text_input_screen import TextInputScreen
 from jnav.virtual_list_view import VirtualListView
 
@@ -110,7 +111,8 @@ class JnavApp(App[None]):
         self,
         model: LogModel,
         filter_provider: FilterProvider,
-        fields: FieldManager,
+        role_mapper: RoleMapper,
+        selectors: SelectorProvider,
         search: SearchEngine,
         state_file: Path | None = None,
         follow: bool = False,
@@ -130,7 +132,8 @@ class JnavApp(App[None]):
         self.theme = "jnav"
         self._model = model
         self._filter_provider = filter_provider
-        self._fields = fields
+        self._role_mapper = role_mapper
+        self._selectors = selectors
         self._search = search
         self._search_pos: int = -1
         self._expanded_mode: bool = True
@@ -146,7 +149,8 @@ class JnavApp(App[None]):
             Vertical(
                 LogListView(
                     model=self._model,
-                    fields=self._fields,
+                    role_mapper=self._role_mapper,
+                    selectors=self._selectors,
                     search=self._search,
                     filter_provider=self._filter_provider,
                     id="log-list",
@@ -158,7 +162,7 @@ class JnavApp(App[None]):
             Vertical(
                 DetailTree(
                     "entry",
-                    fields=self._fields,
+                    selectors=self._selectors,
                     filters=self._filter_provider,
                     search=self._search,
                     id="detail-tree",
@@ -201,8 +205,8 @@ class JnavApp(App[None]):
             return
         if "filter_tree" in state:
             await self._filter_provider.load_root(state["filter_tree"])
-        await self._fields.set_custom_fields(state.get("custom_fields", []))
-        await self._fields.set_mapping(state.get("field_mapping"))
+        await self._selectors.set_selectors(state.get("selectors", []))
+        await self._role_mapper.set_mapping(state.get("role_mapping"))
         self._expanded_mode = state.get("expanded_mode", False)
         await self._model.set_filtering_enabled(not state.get("filters_paused", False))
         await self._search.set_term(state.get("search_term", ""))
@@ -217,8 +221,8 @@ class JnavApp(App[None]):
         lv = self.query_one("#log-list", LogListView)
         state = {
             "filter_tree": self._filter_provider.dump_root(),
-            "custom_fields": self._fields.custom_fields,
-            "field_mapping": self._fields.mapping.model_dump(),
+            "selectors": self._selectors.selectors,
+            "role_mapping": self._role_mapper.mapping.model_dump(),
             "expanded_mode": lv.expanded_mode,
             "filters_paused": self._model.filtering_enabled is False,
             "search_term": self._search.term,
@@ -244,7 +248,7 @@ class JnavApp(App[None]):
         total = self._model.total_count()
         shown = len(self._model.visible_indices)
         has_filters = bool(self._filter_provider.root.children)
-        n_cols = sum(1 for c in self._fields.custom_fields if c["enabled"])
+        n_cols = sum(1 for s in self._selectors.selectors if s["enabled"])
 
         parts: list[str] = [f"Showing {shown}/{total}"]
         if has_filters:
@@ -274,7 +278,7 @@ class JnavApp(App[None]):
         self.push_screen(FilterManagerScreen(self._filter_provider))
 
     def action_open_columns(self) -> None:
-        self.push_screen(FieldManagerScreen(self._fields))
+        self.push_screen(SelectorManagerScreen(self._selectors))
 
     def action_start_search(self) -> None:
         async def on_dismiss(term: str | None) -> None:
@@ -335,7 +339,7 @@ class JnavApp(App[None]):
         self.query_one("#detail-tree", DetailTree).focus()
 
     async def action_reset(self) -> None:
-        await self._fields.clear_custom_fields()
+        await self._selectors.clear_selectors()
         await self._search.clear()
         await self._filter_provider.clear_filters()
         self.notify("Filters and fields cleared", timeout=2)

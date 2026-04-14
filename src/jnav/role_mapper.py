@@ -1,0 +1,53 @@
+from typing import Any
+
+from aioreactive import AsyncSubject
+
+from jnav.field_mapping import FieldMapping, detect_role_updates
+from jnav.store import IndexedEntry
+
+
+class RoleMapper:
+    """Tracks fields discovered in the data and the timestamp/level/message role mapping."""
+
+    on_change: AsyncSubject[None]
+
+    def __init__(self) -> None:
+        self._all_fields: set[str] = set()
+        self._mapping: FieldMapping = FieldMapping()
+        self.on_change = AsyncSubject[None]()
+
+    @property
+    def all_fields(self) -> set[str]:
+        return self._all_fields
+
+    @property
+    def mapping(self) -> FieldMapping:
+        return self._mapping
+
+    async def discover(self, entries: list[IndexedEntry]) -> None:
+        """Discover fields from a list of entries. Updates the mapping if new roles are detected."""
+        for ie in entries:
+            await self.discover_from_entry(ie.entry.expanded)
+
+    async def discover_from_entry(self, entry: dict[str, Any]) -> None:
+        """Discover fields from a single entry. Updates the mapping if new roles are detected."""
+        new_fields = entry.keys() - self._all_fields
+        self._all_fields.update(new_fields)
+
+        updates = detect_role_updates(self._mapping, entry, new_fields)
+
+        if not updates:
+            return
+
+        self._mapping = self._mapping.model_copy(update=updates)
+        await self.on_change.asend(None)
+
+    async def set_mapping(
+        self,
+        mapping_data: dict[str, Any] | FieldMapping | None,
+    ) -> None:
+        if mapping_data:
+            self._mapping = FieldMapping.model_validate(mapping_data)
+        else:
+            self._mapping = FieldMapping()
+        await self.on_change.asend(None)

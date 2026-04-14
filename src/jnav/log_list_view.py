@@ -6,7 +6,8 @@ from rich.style import Style
 from textual.binding import Binding
 from textual.events import Key
 
-from .field_manager import FieldManager
+from .role_mapper import RoleMapper
+from .selector_provider import SelectorProvider
 from .filter_provider import FilterProvider
 from .filtering import text_search_expr
 from .key_sequences import KeySequence, KeySequenceMixin
@@ -78,7 +79,8 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         self,
         *,
         model: LogModel,
-        fields: FieldManager,
+        role_mapper: RoleMapper,
+        selectors: SelectorProvider,
         search: SearchEngine,
         filter_provider: FilterProvider,
         id: str | None = None,
@@ -91,13 +93,15 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
             follow=follow,
         )
         self._log_model = model
-        self._fields = fields
+        self._role_mapper = role_mapper
+        self._selectors = selectors
         self._search = search
         self._filter_provider = filter_provider
         self._expanded_mode: bool = True
         self._renderer = LogEntryRenderer(
             search=search,
-            fields=fields,
+            role_mapper=role_mapper,
+            selectors=selectors,
         )
         self._entry_styles: EntryStyles | None = None
         self._saved_store_idx: int = 0
@@ -155,7 +159,12 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         await self._log_model.on_append.subscribe_async(self._on_append_discover)
         await self._log_model.on_will_rebuild.subscribe_async(self._on_will_rebuild)
         await self._log_model.on_rebuild.subscribe_async(self._on_rebuild)
-        await self._fields.on_change.subscribe_async(self._on_fields_or_search_changed)
+        await self._role_mapper.on_change.subscribe_async(
+            self._on_fields_or_search_changed
+        )
+        await self._selectors.on_change.subscribe_async(
+            self._on_fields_or_search_changed
+        )
         await self._search.on_change.subscribe_async(self._on_fields_or_search_changed)
 
     async def _on_fields_or_search_changed(self, _: None) -> None:
@@ -181,7 +190,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         return self._expanded_mode
 
     async def initial_build(self) -> None:
-        await self._fields.discover(self._log_model.all())
+        await self._role_mapper.discover(self._log_model.all())
         self._rebuild()
         if not self._log_model.is_empty():
             self.index = 0
@@ -200,7 +209,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
             pass
 
     async def _on_append_discover(self, new_entries: list[IndexedEntry]) -> None:
-        await self._fields.discover(new_entries)
+        await self._role_mapper.discover(new_entries)
 
     async def _on_will_rebuild(self, _: None) -> None:
         # Snapshot cursor state from the OLD view, before the model rebuilds.
@@ -255,7 +264,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
     ) -> bool | None:
         del parameters  # unused
         if action == "toggle_expanded":
-            return bool(self._fields.active_fields)
+            return bool(self._selectors.active_selectors)
         return True
 
     def action_toggle_expanded(self) -> None:

@@ -8,10 +8,11 @@ from typing import cast
 import aioreactive as rx
 import click
 
-from jnav.field_manager import FieldManager
+from jnav.role_mapper import RoleMapper
 from jnav.filter_provider import FilterProvider
 from jnav.log_model import LogModel
 from jnav.search_engine import SearchEngine
+from jnav.selector_provider import SelectorProvider
 from jnav.store import Store
 
 from .app import JnavApp
@@ -50,7 +51,8 @@ async def _run(file: str | None, follow: bool) -> None:
         raise SystemExit(1)
 
     filter_provider = FilterProvider()
-    fields = FieldManager()
+    role_mapper = RoleMapper()
+    selectors = SelectorProvider()
     store = Store()
     model = LogModel(
         store=store,
@@ -81,7 +83,8 @@ async def _run(file: str | None, follow: bool) -> None:
     app = JnavApp(
         model=model,
         filter_provider=filter_provider,
-        fields=fields,
+        role_mapper=role_mapper,
+        selectors=selectors,
         search=search,
         state_file=state_file,
         follow=follow,
