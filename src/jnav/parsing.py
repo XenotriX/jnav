@@ -96,6 +96,6 @@ def _try_parse_json(value: str) -> dict[str, Any] | list[Any] | None:
         parsed = orjson.loads(value)
     except orjson.JSONDecodeError, ValueError:
         return None
-    if isinstance(parsed, (dict, list)):
+    if isinstance(parsed, (dict, list)) and len(parsed) > 0:
         return cast(dict[str, Any] | list[Any], parsed)
     return None

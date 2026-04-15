@@ -43,3 +43,9 @@ class TestParseEntry:
         assert result is not None
         assert result.expanded["msg"] == "plain text"
         assert result.expanded_paths == set()
+
+    def test_empty_json_string_not_expanded(self) -> None:
+        result = parse_entry('{"a": "{}", "b": "[]"}')
+        assert result is not None
+        assert result.expanded == {"a": "{}", "b": "[]"}
+        assert result.expanded_paths == set()
