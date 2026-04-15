@@ -165,6 +165,7 @@ class JnavApp(App[None]):
                     selectors=self._selectors,
                     filters=self._filter_provider,
                     search=self._search,
+                    role_mapper=self._role_mapper,
                     id="detail-tree",
                 ),
                 id="detail-panel",

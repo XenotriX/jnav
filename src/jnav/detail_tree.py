@@ -11,9 +11,11 @@ from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
 
 from .filter_provider import FilterProvider
-from .key_sequences import KeySequence, KeySequenceMixin
 from .filtering import get_nested, jq_value_literal, resolve_selected_paths
+from .key_sequences import KeySequence, KeySequenceMixin
+from .log_entry_item import format_timestamp
 from .parsing import ParsedEntry
+from .role_mapper import RoleMapper
 from .search_engine import SearchEngine
 from .selector_provider import SelectorProvider
 from .tree_rendering import TreeBuildVisitor, walk_tree
@@ -45,18 +47,6 @@ def _detail_add_leaf(
 if TYPE_CHECKING:
     from textual import getters
     from textual.app import App
-
-TS_KEYS = {"timestamp", "ts", "time"}
-
-
-def _format_timestamp(value: str) -> str:
-    from datetime import datetime
-
-    try:
-        dt = datetime.fromisoformat(value)
-        return dt.strftime("%H:%M:%S") + f".{dt.microsecond // 1000:03d}"
-    except ValueError, TypeError:
-        return str(value)
 
 
 class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
@@ -103,12 +93,14 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         selectors: SelectorProvider,
         filters: FilterProvider,
         search: SearchEngine,
+        role_mapper: RoleMapper,
         id: str | None = None,
     ) -> None:
         super().__init__(label, id=id)
         self._selectors = selectors
         self._filters = filters
         self._search = search
+        self._role_mapper = role_mapper
 
     def on_focus(self) -> None:
         if self.parent is not None:
@@ -121,6 +113,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
     async def on_mount(self) -> None:  # pyright: ignore[reportIncompatibleMethodOverride, reportImplicitOverride]
         await self._selectors.on_change.subscribe_async(self._rerender)
         await self._search.on_change.subscribe_async(self._rerender)
+        await self._role_mapper.on_change.subscribe_async(self._rerender)
         self.app.theme_changed_signal.subscribe(self, lambda _: self._rebuild_tree())
 
     async def _rerender(self, _: None) -> None:
@@ -141,14 +134,12 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         entry = self._entry.expanded
         selected = resolve_selected_paths(self._selectors.active_selectors, entry)
 
-        ts_val = None
-        for ts_key in TS_KEYS:
-            ts_val = entry.get(ts_key)
-            if ts_val:
-                break
         label = f"#{self._entry_index + 1}"
-        if ts_val:
-            label += f" ({_format_timestamp(str(ts_val))})"
+        ts_field = self._role_mapper.mapping.timestamp
+        if ts_field is not None:
+            ts_val = entry.get(ts_field.path)
+            if ts_val not in (None, ""):
+                label += f" ({format_timestamp(ts_val, ts_field.format)})"
         if self.show_selected_only:
             label += " (selected)"
 
