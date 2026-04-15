@@ -1,7 +1,7 @@
 import functools
 import json
 import re
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 import jq
 from pydantic import BaseModel, Discriminator, Field
@@ -47,7 +47,7 @@ def apply_jq_filter(
     for i, entry in enumerate(entries):
         try:
             results = prog.input_value(entry).all()
-            if any(_is_truthy(r) for r in results):
+            if any(r is not None and r is not False for r in results):
                 matched.append(i)
         except ValueError:
             continue
@@ -81,7 +81,7 @@ def build_expression(node: FilterNode) -> str | None:
         result = child_exprs[0][0]
     else:
         joiner = f" {node.operator} "
-        wrapped = []
+        wrapped: list[str] = []
         for expr, child in child_exprs:
             needs_parens = "|" in expr or (
                 isinstance(child, FilterGroup)
@@ -120,12 +120,6 @@ def check_filter_warning(expression: str) -> str | None:
     if _ASSIGNMENT_RE.search(expression):
         return "Did you mean '==' instead of '='? ('=' is jq's update operator)"
     return None
-
-
-def _is_truthy(value: object) -> bool:
-    if value is None or value is False:
-        return False
-    return not (isinstance(value, (list, dict, str)) and len(value) == 0)
 
 
 def get_nested(entry: dict[str, Any], path: str) -> object:
@@ -182,6 +176,7 @@ def resolve_selected_paths(columns: set[str], entry: dict[str, Any]) -> set[str]
                 base = _jq_path_to_str(base_parts)
                 for r in results:
                     if isinstance(r, dict):
+                        r = cast(dict[str, object], r)
                         for key in r:
                             result.add(f"{base}.{key}")
         except ValueError:

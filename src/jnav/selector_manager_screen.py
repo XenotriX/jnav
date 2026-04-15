@@ -1,4 +1,4 @@
-from typing import ClassVar, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -12,8 +12,15 @@ from jnav.manager_screen_common import list_option_prompt
 from jnav.selector_provider import SelectorProvider
 from jnav.text_input_screen import TextInputScreen
 
+if TYPE_CHECKING:
+    from textual import getters
+    from textual.app import App
+
 
 class SelectorManagerScreen(ModalScreen[bool]):
+    if TYPE_CHECKING:
+        app = getters.app(App[None])
+
     DEFAULT_CSS = """
     SelectorManagerScreen {
         align: center middle;
