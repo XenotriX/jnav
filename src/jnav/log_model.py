@@ -1,11 +1,12 @@
 from typing import override
+
 import aioreactive as rx
 from aioreactive import AsyncSubject, pipe
 
 from jnav.filter_provider import FilterProvider
 from jnav.filtering import apply_filter_tree
-from jnav.store import IndexedEntry, Store
 from jnav.model import Model
+from jnav.store import IndexedEntry, Store
 
 
 class LogModel(Model[IndexedEntry]):

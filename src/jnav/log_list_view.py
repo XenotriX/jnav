@@ -6,15 +6,15 @@ from rich.style import Style
 from textual.binding import Binding
 from textual.events import Key
 
-from .role_mapper import RoleMapper
-from .selector_provider import SelectorProvider
 from .filter_provider import FilterProvider
 from .filtering import text_search_expr
 from .key_sequences import KeySequence, KeySequenceMixin
 from .log_entry_item import LEVEL_COMPONENTS
 from .log_entry_renderer import EntryStyles, LogEntryRenderer
 from .log_model import LogModel
+from .role_mapper import RoleMapper
 from .search_engine import SearchEngine
+from .selector_provider import SelectorProvider
 from .store import IndexedEntry
 from .text_input_screen import TextInputScreen
 from .virtual_list_view import VirtualListView

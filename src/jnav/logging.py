@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from logging import FileHandler
 from typing import override
 
@@ -17,9 +17,7 @@ class HLJsonFormatter(JsonFormatter):
         log_data.pop("funcName", None)
         if log_data.get("exc_info") is None:
             log_data.pop("exc_info", None)
-        log_data["ts"] = datetime.fromtimestamp(
-            log_data["created"], tz=timezone.utc
-        ).isoformat()
+        log_data["ts"] = datetime.fromtimestamp(log_data["created"], tz=UTC).isoformat()
         log_data.pop("created", None)
         return log_data
 

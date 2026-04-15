@@ -10,11 +10,11 @@ from textual.containers import Horizontal, Vertical
 from textual.theme import Theme
 from textual.widgets import Footer, Header, Static
 
-from jnav.role_mapper import RoleMapper
 from jnav.filter_manager_screen import FilterManagerScreen
 from jnav.filter_provider import FilterProvider
 from jnav.help_screen import HelpScreen
 from jnav.log_model import LogModel
+from jnav.role_mapper import RoleMapper
 from jnav.search_engine import SearchEngine
 from jnav.selector_manager_screen import SelectorManagerScreen
 from jnav.selector_provider import SelectorProvider

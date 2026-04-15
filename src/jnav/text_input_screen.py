@@ -1,4 +1,5 @@
 from typing import override
+
 from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding

@@ -21,7 +21,7 @@ class OffsetGroup:
 
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
-    ) -> Generator[Segment, None, None]:
+    ) -> Generator[Segment]:
         segments = console.render(self._group, options)
         for i, line in enumerate(Segment.split_lines(segments)):
             if i < self._skip:

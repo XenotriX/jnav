@@ -9,7 +9,6 @@ from jnav.filter_provider import FilterProvider
 from jnav.log_model import LogModel
 from jnav.parsing import ParsedEntry, parse_entry
 from jnav.store import Store
-
 from tests.conftest import (
     SAMPLE_LINES,
     fake_line_reader,

@@ -5,9 +5,9 @@ from rich.padding import Padding
 from rich.style import Style
 from textual.color import Color
 
-from .role_mapper import RoleMapper
 from .inline_tree import render_inline_tree
 from .log_entry_item import render_summary
+from .role_mapper import RoleMapper
 from .search_engine import SearchEngine
 from .selector_provider import SelectorProvider
 from .store import IndexedEntry

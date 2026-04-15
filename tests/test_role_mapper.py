@@ -3,9 +3,9 @@ from typing import Any
 import pytest
 import pytest_asyncio
 
-from jnav.role_mapper import RoleMapper
 from jnav.field_mapping import FieldMapping, TimestampField
 from jnav.log_entry_item import format_timestamp
+from jnav.role_mapper import RoleMapper
 from jnav.store import IndexedEntry
 
 from .conftest import make_entry, make_signal_collector

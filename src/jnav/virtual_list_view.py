@@ -1,5 +1,5 @@
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Callable, Generic, Literal, TypeVar, override
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, override
 
 from rich.console import RenderableType
 from textual import getters

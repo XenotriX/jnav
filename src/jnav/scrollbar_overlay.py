@@ -54,7 +54,7 @@ class ScrollbarOverlay:
         self,
         console: Console,
         options: ConsoleOptions,
-    ) -> Generator[Segment, None, None]:
+    ) -> Generator[Segment]:
         width = options.max_width
         height = options.height or options.max_height
 

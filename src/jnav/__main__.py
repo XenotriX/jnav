@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import logging
 import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -8,9 +9,9 @@ from typing import cast
 import aioreactive as rx
 import click
 
-from jnav.role_mapper import RoleMapper
 from jnav.filter_provider import FilterProvider
 from jnav.log_model import LogModel
+from jnav.role_mapper import RoleMapper
 from jnav.search_engine import SearchEngine
 from jnav.selector_provider import SelectorProvider
 from jnav.store import Store
@@ -20,8 +21,6 @@ from .buffer import buffer_time_or_count
 from .logging import init_logging
 from .parsing import ParsedEntry, parse_entry
 from .reading import read_file, read_pipe, setup_stdin_pipe
-
-import logging
 
 logging.getLogger("aioreactive").setLevel(logging.WARNING)
 

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from rich.style import Style
 from rich.text import Text
@@ -36,9 +36,7 @@ def format_timestamp(value: object, fmt: TimestampFormat) -> str:
         else:
             if not isinstance(value, (int, float)) or isinstance(value, bool):
                 return str(value)
-            dt = datetime.fromtimestamp(
-                float(value) / _EPOCH_DIVISORS[fmt], tz=timezone.utc
-            )
+            dt = datetime.fromtimestamp(float(value) / _EPOCH_DIVISORS[fmt], tz=UTC)
         return dt.strftime("%H:%M:%S") + f".{dt.microsecond // 1000:03d}"
     except ValueError, TypeError, OSError, OverflowError:
         return str(value)
