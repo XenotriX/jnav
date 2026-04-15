@@ -1,10 +1,10 @@
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Literal, override
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, override
 
 from rich.console import RenderableType
 from textual import getters
 from textual.app import App
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
@@ -67,7 +67,7 @@ class VirtualListView[T](Widget, can_focus=True):
         def control(self) -> VirtualListView[Any]:
             return self.virtual_list
 
-    COMPONENT_CLASSES = {
+    COMPONENT_CLASSES: ClassVar[set[str]] = {
         "scrollbar--thumb",
     }
 
@@ -77,7 +77,7 @@ class VirtualListView[T](Widget, can_focus=True):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("j", "cursor_down", show=False),
         Binding("k", "cursor_up", show=False),
         Binding("ctrl+d", "scroll_half_down", show=False),

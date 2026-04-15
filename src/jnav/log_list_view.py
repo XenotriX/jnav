@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, ClassVar, override
 
 from rich.console import RenderableType
 from rich.style import Style
-from textual.binding import Binding
+from textual.binding import BindingType
 from textual.events import Key
 
 from .filter_provider import FilterProvider
@@ -28,7 +28,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
     if TYPE_CHECKING:
         app = getters.app(App[None])
 
-    COMPONENT_CLASSES = {
+    COMPONENT_CLASSES: ClassVar[set[str]] = {
         "summary--level-error",
         "summary--level-fatal",
         "summary--level-critical",
@@ -48,15 +48,15 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         "tree--background",
     }
 
-    BINDINGS: ClassVar[list[Binding]] = []
+    BINDINGS: ClassVar[list[BindingType]] = []
 
-    SEQUENCES = [
+    SEQUENCES: ClassVar[list[KeySequence]] = [
         KeySequence("gg", "jump_top", "jump to top"),
         KeySequence("ft", "text_filter", "text filter"),
         KeySequence("fp", "toggle_filters_pause", "pause filters"),
         KeySequence("vi", "toggle_expanded", "toggle inline tree"),
     ]
-    SEQUENCE_GROUPS = {"f": "filter ▸", "v": "view ▸"}
+    SEQUENCE_GROUPS: ClassVar[dict[str, str]] = {"f": "filter ▸", "v": "view ▸"}
 
     DEFAULT_CSS = """
     LogListView {

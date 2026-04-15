@@ -1,7 +1,7 @@
-from typing import override
+from typing import ClassVar, override
 
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Static
@@ -59,7 +59,7 @@ class HelpScreen(ModalScreen[bool]):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "close", "Close", priority=True),
         Binding("q", "close", show=False),
         Binding("ctrl+c", "close", show=False),

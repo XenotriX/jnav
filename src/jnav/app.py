@@ -1,11 +1,11 @@
 import json
 import logging
 from pathlib import Path
-from typing import override
+from typing import ClassVar, override
 
 from textual import on
 from textual.app import App, ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.theme import Theme
 from textual.widgets import Footer, Header, Static
@@ -95,7 +95,7 @@ class JnavApp(App[None]):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("F", "open_filters", "Filters \uf0c9"),
         Binding("S", "open_columns", "Selectors \uf0c9"),
         Binding("d", "toggle_detail", "Toggle Detail"),

@@ -1,8 +1,8 @@
-from typing import override
+from typing import ClassVar, override
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.screen import ModalScreen
 from textual.widgets import OptionList, Static
@@ -38,7 +38,7 @@ class SelectorManagerScreen(ModalScreen[bool]):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "maybe_close", "Close", priority=True),
         Binding("q", "maybe_close", show=False),
         Binding("ctrl+c", "maybe_close", show=False),

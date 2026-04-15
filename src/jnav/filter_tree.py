@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from rich.text import Text
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.message import Message
 from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
@@ -44,7 +44,7 @@ class FilterTree(Tree[FilterTreeData]):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("a", "add_filter", "Add", show=False),

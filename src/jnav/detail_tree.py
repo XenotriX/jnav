@@ -2,10 +2,10 @@ import json
 import os
 import subprocess
 import tempfile
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, ClassVar, TypedDict
 
 from rich.text import Text
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.events import Key
 from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 
 
 class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
-    COMPONENT_CLASSES = {
+    COMPONENT_CLASSES: ClassVar[set[str]] = {
         "tree--key",
         "tree--key-selected",
         "tree--value",
@@ -64,7 +64,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
     if TYPE_CHECKING:
         app = getters.app(App[None])
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("j", "cursor_down", show=False),
         Binding("k", "cursor_up", show=False),
         Binding("g", "scroll_home", show=False),
@@ -74,13 +74,13 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         Binding("s", "add_select", "Select"),
     ]
 
-    SEQUENCES = [
+    SEQUENCES: ClassVar[list[KeySequence]] = [
         KeySequence("ff", "filter_value", "by value"),
         KeySequence("fn", "filter_has", "has field"),
         KeySequence("vo", "toggle_filter_tree", "show selected only"),
         KeySequence("ve", "view_value", "open in editor"),
     ]
-    SEQUENCE_GROUPS = {"f": "filter ▸", "v": "view ▸"}
+    SEQUENCE_GROUPS: ClassVar[dict[str, str]] = {"f": "filter ▸", "v": "view ▸"}
 
     show_selected_only: bool = False
     _entry: ParsedEntry | None = None
