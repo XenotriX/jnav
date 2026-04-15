@@ -64,10 +64,12 @@ class VirtualListApp[T](App[None]):
         items: list[T],
         *,
         render_item: RenderItemFn[T] = render_str,  # type: ignore[assignment]
+        follow: bool = False,
     ) -> None:
         super().__init__()
         self._items = items
         self._render_item = render_item
+        self._follow = follow
 
     @override
     def compose(self) -> ComposeResult:
@@ -75,6 +77,7 @@ class VirtualListApp[T](App[None]):
         vl: VirtualListView[T] = VirtualListView(
             model=model,  # type: ignore[arg-type]
             render_item=self._render_item,
+            follow=self._follow,
         )
         yield vl
 
@@ -130,7 +133,8 @@ async def test_append_to_model_after_mount():
 
         model = cast(ListModel[str], vl._model)  # pyright: ignore[reportPrivateUsage]
         model.append("gamma")
-        vl.refresh()
+        await model.on_append.asend(["gamma"])
+        await pilot.pause()
         assert vl.count() == 3
         assert get_visible_items(vl) == ["alpha", "beta", "gamma"]
 
@@ -200,6 +204,7 @@ async def test_cursor_starts_at_zero():
         del pilot  # unused
         vl = cast(VirtualListView[str], app.query_one(VirtualListView))
         assert vl.index == 0
+        assert vl.follow is False
 
 
 @pytest.mark.asyncio
@@ -254,8 +259,10 @@ async def test_cursor_scrolls_view_when_past_bottom():
         for _ in range(15):
             vl.cursor_down()
         assert vl.index == 15
+        assert vl.scroll_top_index > 0
         visible = get_visible_items(vl)
         assert f"item_{15}" in visible
+        assert "item_0" not in visible
 
 
 def render_multiline(item: str, index: int) -> RenderableType:
@@ -319,6 +326,7 @@ async def test_selected_event_on_enter():
         assert len(app.selected) == 1
         assert app.selected[0].index == 1
         assert app.selected[0].item == "beta"
+        assert app.selected[0].control is vl
 
 
 class HighlightedCapture(App[None]):
@@ -361,21 +369,11 @@ async def test_highlighted_event_on_cursor_move():
         assert len(app.highlighted) == 1
         assert app.highlighted[0].index == 1
         assert app.highlighted[0].item == "beta"
+        assert app.highlighted[0].control is vl
 
 
 @pytest.mark.asyncio
-async def test_scroll_offset_components():
-    items = [f"item_{i}" for i in range(100)]
-    app = VirtualListApp(items, render_item=render_multiline)
-    async with app.run_test(size=(80, 10)) as pilot:
-        await pilot.pause()
-        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
-        assert vl.scroll_top_index == 0
-        assert vl.scroll_line_offset == 0
-
-
-@pytest.mark.asyncio
-async def test_jump_to_bottom_multiline():
+async def test_set_index_to_last_multiline():
     items = [f"item_{i}" for i in range(100)]
     app = VirtualListApp(items, render_item=render_multiline)
     async with app.run_test(size=(80, 10)) as pilot:
@@ -390,7 +388,7 @@ async def test_jump_to_bottom_multiline():
 
 
 @pytest.mark.asyncio
-async def test_jump_to_bottom_single_line():
+async def test_set_index_to_last_single_line():
     items = [f"item_{i}" for i in range(100)]
     app = VirtualListApp(items)
     async with app.run_test(size=(80, 10)) as pilot:
@@ -551,4 +549,269 @@ async def test_render_includes_partially_visible_bottom_item():
 
         rendered = vl.render()
         height = vl._measure_height(rendered)  # pyright: ignore[reportPrivateUsage]
-        assert height >= 11
+        assert height == 12
+
+
+@pytest.mark.asyncio
+async def test_render_returns_empty_string_when_model_empty():
+    app = VirtualListApp[str]([])
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        assert vl.render() == ""
+
+
+@pytest.mark.asyncio
+async def test_validate_index_clamps_to_zero_when_empty():
+    app = VirtualListApp[str]([])
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.index = 5
+        assert vl.index == 0
+
+
+@pytest.mark.asyncio
+async def test_cursor_viewport_offset_single_line_in_view():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items)
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        assert vl.cursor_viewport_offset() == 0
+        for _ in range(5):
+            vl.cursor_down()
+        assert vl.cursor_viewport_offset() == 5
+
+
+@pytest.mark.asyncio
+async def test_cursor_viewport_offset_multiline_after_scroll():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items, render_item=render_multiline)
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        for _ in range(5):
+            vl.cursor_down()
+        assert vl.index == 5
+        assert vl.scroll_top_index == 1
+        assert vl.cursor_viewport_offset() == 8
+
+
+@pytest.mark.asyncio
+async def test_scroll_to_cursor_offset_roundtrip():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items, render_item=render_multiline)
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        for _ in range(10):
+            vl.cursor_down()
+        before = vl.cursor_viewport_offset()
+        top_before = vl.scroll_top_index
+        offset_before = vl.scroll_line_offset
+        vl.scroll_to_cursor_offset(before)
+        assert vl.cursor_viewport_offset() == before
+        assert vl.scroll_top_index == top_before
+        assert vl.scroll_line_offset == offset_before
+
+
+@pytest.mark.asyncio
+async def test_scroll_to_cursor_offset_beyond_top_clamps():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items)
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        for _ in range(3):
+            vl.cursor_down()
+        vl.scroll_to_cursor_offset(10_000)
+        assert vl.scroll_top_index == 0
+        assert vl.scroll_line_offset == 0
+
+
+@pytest.mark.asyncio
+async def test_scroll_to_cursor_offset_zero_puts_cursor_at_top():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items, render_item=render_multiline)
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        for _ in range(5):
+            vl.cursor_down()
+        vl.scroll_to_cursor_offset(0)
+        assert vl.scroll_top_index == 5
+        assert vl.scroll_line_offset == 0
+
+
+@pytest.mark.asyncio
+async def test_scroll_half_down_single_line():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items)
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.scroll_half_down()
+        assert vl.index == 5
+
+
+@pytest.mark.asyncio
+async def test_scroll_half_down_multiline():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items, render_item=render_multiline)
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.scroll_half_down()
+        assert vl.index == 3
+
+
+@pytest.mark.asyncio
+async def test_scroll_half_up_single_line():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items)
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.index = 20
+        vl.scroll_half_up()
+        assert vl.index == 15
+
+
+@pytest.mark.asyncio
+async def test_scroll_half_up_multiline():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items, render_item=render_multiline)
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.index = 20
+        vl.scroll_half_up()
+        assert vl.index == 17
+
+
+@pytest.mark.asyncio
+async def test_scroll_half_down_stops_at_last_item():
+    items = [f"item_{i}" for i in range(6)]
+    app = VirtualListApp(items)
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.scroll_half_down()
+        assert vl.index == 5
+
+
+@pytest.mark.asyncio
+async def test_scroll_half_up_at_top_stays_at_zero():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items)
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.scroll_half_up()
+        assert vl.index == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "action,expected_index",
+    [
+        ("action_cursor_down", 11),
+        ("action_cursor_up", 9),
+        ("action_scroll_half_down", 15),
+        ("action_scroll_half_up", 5),
+        ("action_jump_top", 0),
+    ],
+    ids=["down", "up", "half_down", "half_up", "jump_top"],
+)
+async def test_navigation_actions_clear_follow(
+    action: str, expected_index: int
+) -> None:
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items, follow=True)
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.index = 10
+        assert vl.follow is True
+        getattr(vl, action)()
+        assert vl.follow is False
+        assert vl.index == expected_index
+
+
+@pytest.mark.asyncio
+async def test_action_jump_bottom_enables_follow():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items)
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.action_jump_bottom()
+        assert vl.follow is True
+        assert vl.index == 99
+
+
+@pytest.mark.asyncio
+async def test_action_jump_bottom_on_empty_does_not_crash():
+    app = VirtualListApp[str]([])
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.action_jump_bottom()
+        assert vl.follow is True
+
+
+@pytest.mark.asyncio
+async def test_ensure_cursor_visible_when_cursor_above_viewport():
+    items = [f"item_{i}" for i in range(100)]
+    app = VirtualListApp(items)
+    async with app.run_test(size=(80, 10)) as pilot:
+        del pilot
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.scroll_to_item(20)
+        vl.index = 5
+        assert vl.scroll_top_index == 5
+        assert vl.scroll_line_offset == 0
+
+
+@pytest.mark.asyncio
+async def test_append_with_follow_jumps_to_new_last():
+    items = ["alpha", "beta"]
+    app = VirtualListApp(items, follow=True)
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        model = cast(ListModel[str], vl._model)  # pyright: ignore[reportPrivateUsage]
+        model.append("gamma")
+        await model.on_append.asend(["gamma"])
+        await pilot.pause()
+        assert vl.index == 2
+
+
+@pytest.mark.asyncio
+async def test_append_to_empty_non_followed_sets_index_to_zero():
+    app = VirtualListApp[str]([])
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        assert vl.index == -1
+        model = cast(ListModel[str], vl._model)  # pyright: ignore[reportPrivateUsage]
+        model.append("first")
+        await model.on_append.asend(["first"])
+        await pilot.pause()
+        assert vl.index == 0
+
+
+@pytest.mark.asyncio
+async def test_append_to_non_empty_non_followed_preserves_index():
+    items = ["alpha", "beta", "gamma"]
+    app = VirtualListApp(items)
+    async with app.run_test(size=(80, 10)) as pilot:
+        await pilot.pause()
+        vl = cast(VirtualListView[str], app.query_one(VirtualListView))
+        vl.index = 1
+        model = cast(ListModel[str], vl._model)  # pyright: ignore[reportPrivateUsage]
+        model.append("delta")
+        await model.on_append.asend(["delta"])
+        await pilot.pause()
+        assert vl.index == 1
