@@ -8,10 +8,11 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.theme import Theme
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Footer, Static
 
 from jnav.filter_manager_screen import FilterManagerScreen
 from jnav.filter_provider import FilterProvider
+from jnav.header import Header
 from jnav.help_screen import HelpScreen
 from jnav.log_model import LogModel
 from jnav.role_mapper import RoleMapper
@@ -118,6 +119,7 @@ class JnavApp(App[None]):
         role_mapper: RoleMapper,
         selectors: SelectorProvider,
         search: SearchEngine,
+        file_name: str,
         state_file: Path | None = None,
         follow: bool = False,
     ) -> None:
@@ -145,10 +147,12 @@ class JnavApp(App[None]):
         self._detail_visible_on_load: bool = False
         self._show_selected_only_on_load: bool = False
         self._start_following = follow
+        self._file_name = file_name
+        self.sub_title = file_name
 
     @override
     def compose(self) -> ComposeResult:
-        yield Header()
+        yield Header(self._file_name)
         yield Horizontal(
             Vertical(
                 LogListView(

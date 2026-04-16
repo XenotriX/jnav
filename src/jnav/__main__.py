@@ -87,9 +87,9 @@ async def _run(file: str | None, follow: bool) -> None:
         search=search,
         state_file=state_file,
         follow=follow,
+        file_name=file if file else "<stdin>",
     )
     app.title = "jnav"
-    app.sub_title = file if file else "<stdin>"
     await app.run_async()
 
 
