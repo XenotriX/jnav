@@ -34,8 +34,6 @@ class FilterBar(Static):
 
 
 class JnavApp(App[None]):
-    ENABLE_COMMAND_PALETTE = False
-
     DEFAULT_CSS = """
     JnavApp Footer {
         background: $surface;
@@ -111,6 +109,50 @@ class JnavApp(App[None]):
     }
     #detail-tree > .tree--guides-selected {
         color: $foreground;
+    }
+    CommandPalette {
+        background: $background 0%;
+    }
+    CommandPalette > Vertical {
+        margin-top: 3;
+        height: auto;
+        max-height: 70%;
+        width: 90;
+        max-width: 90%;
+        visibility: visible;
+        border: round $primary;
+        background: $background;
+        &:dark { background: $background; }
+    }
+    CommandPalette #--input {
+        border: none;
+        background: transparent;
+        height: auto;
+    }
+    CommandPalette #--input.--list-visible {
+        border-bottom: solid $primary;
+    }
+    CommandInput, CommandInput:focus {
+        border: none;
+        height: 1;
+        background-tint: transparent;
+    }
+    CommandPalette SearchIcon {
+        margin-top: 0;
+    }
+    CommandPalette #--results {
+        overlay: none;
+    }
+    CommandPalette LoadingIndicator {
+        display: none;
+        border-bottom: none;
+    }
+    CommandPalette LoadingIndicator.--visible {
+        display: block;
+    }
+    CommandList, CommandList.--populating {
+        border-top: none;
+        border-bottom: none;
     }
     """
 
