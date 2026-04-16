@@ -47,17 +47,17 @@ class FilterTree(Tree[FilterTreeData]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
-        Binding("a", "add_filter", "Add", show=False),
-        Binding("e", "edit_filter", "Edit", show=False),
-        Binding("d", "delete", "Delete", show=False),
-        Binding("t", "toggle_item", "Toggle", show=False),
-        Binding("o", "toggle_combine", "AND/OR", show=False),
-        Binding("n", "toggle_negated", "Negate", show=False),
-        Binding("g", "add_group", "Add group", show=False),
-        Binding("p", "paste", "Paste", show=False),
-        Binding("c", "flatten", "Flatten", show=False),
-        Binding("y", "yank", "Yank", show=False),
-        Binding("r", "rename", "Rename", show=False),
+        Binding("a", "add_filter", "Add", show=True),
+        Binding("e", "edit_filter", "Edit", show=True),
+        Binding("d", "delete", "Delete", show=True),
+        Binding("t", "toggle_item", "Toggle", show=True),
+        Binding("o", "toggle_combine", "AND/OR", show=True),
+        Binding("n", "toggle_negated", "Negate", show=True),
+        Binding("g", "add_group", "Add group", show=True),
+        Binding("p", "paste", "Paste", show=True),
+        Binding("c", "flatten", "Flatten", show=True),
+        Binding("y", "yank", "Yank", show=True),
+        Binding("r", "rename", "Rename", show=True),
     ]
 
     def __init__(

@@ -36,6 +36,18 @@ class FilterBar(Static):
 class JnavApp(App[None]):
     ENABLE_COMMAND_PALETTE = False
 
+    DEFAULT_CSS = """
+    JnavApp Footer {
+        background: $surface;
+    }
+    JnavApp FooterKey {
+        margin: 0 1 0 0;
+    }
+    JnavApp FooterKey .footer-key--key {
+        color: $primary;
+    }
+    """
+
     CSS = """
     * {
         scrollbar-size-vertical: 1;
@@ -51,17 +63,6 @@ class JnavApp(App[None]):
     }
     HeaderIcon { display: none; }
     Header.-tall { height: 1; }
-    Footer {
-        background: $surface;
-    }
-    FooterKey {
-        margin: 0 1 0 0;
-        background: $surface;
-    }
-    FooterKey .footer-key--key {
-        color: $primary;
-        background: $surface;
-    }
     .tree--key { color: $primary; text-style: italic; }
     .tree--key-selected { color: $primary; text-style: bold; }
     .tree--value { color: $foreground; }

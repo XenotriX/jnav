@@ -9,6 +9,7 @@ from textual.widgets import Static
 from jnav.filter_provider import FilterProvider
 from jnav.filter_tree import FilterTree
 from jnav.filtering import build_expression
+from jnav.manager_screen_common import WrappingFooter
 
 
 class FilterManagerScreen(ModalScreen[bool]):
@@ -23,15 +24,19 @@ class FilterManagerScreen(ModalScreen[bool]):
         max-height: 70%;
         border: round $primary;
         background: $background;
+    }
+    #filter-wrapper {
         padding: 1 2;
+        height: auto;
     }
     #filter-expression {
-        color: $primary;
-        background: $surface;
+        color: $accent;
+        background: transparent;
+        border: round $background-lighten-2;
         margin: 1 0 0 0;
         padding: 0 1;
         height: auto;
-        max-height: 3;
+        max-height: 5;
     }
     #filter-expression.empty {
         color: $text-muted;
@@ -39,6 +44,15 @@ class FilterManagerScreen(ModalScreen[bool]):
     #filter-hints {
         color: $text-muted;
         margin: 1 0 0 0;
+    }
+    #filter-modal Footer {
+        background: transparent;
+        layout: grid;
+        grid-size: 4;
+        height: auto;
+    }
+    #filter-modal FooterKey .footer-key--key {
+        color: $primary;
     }
     """
 
@@ -55,12 +69,12 @@ class FilterManagerScreen(ModalScreen[bool]):
     @override
     def compose(self) -> ComposeResult:
         yield Vertical(
-            FilterTree(self._fp, id="filter-tree"),
-            Static(id="filter-expression"),
-            Static(
-                "[b]a[/b]:Add  [b]g[/b]:Group  [b]e[/b]:Edit  [b]t[/b]:Toggle  [b]n[/b]:Negate  [b]o[/b]:AND/OR  [b]d[/b]:Cut  [b]p[/b]:Paste  [b]r[/b]:Rename  [b]esc[/b]:Close",
-                id="filter-hints",
+            Vertical(
+                FilterTree(self._fp, id="filter-tree"),
+                Static(id="filter-expression"),
+                id="filter-wrapper",
             ),
+            WrappingFooter(columns=4),
             id="filter-modal",
         )
 
@@ -76,10 +90,10 @@ class FilterManagerScreen(ModalScreen[bool]):
         expr_widget = self.query_one("#filter-expression", Static)
         expr = build_expression(self._fp.root)
         if expr:
-            expr_widget.update(f"jq: {expr}")
+            expr_widget.update(f"{expr}")
             expr_widget.remove_class("empty")
         else:
-            expr_widget.update("jq: (no active filters)")
+            expr_widget.update("(no active filters)")
             expr_widget.add_class("empty")
 
     def action_maybe_close(self) -> None:

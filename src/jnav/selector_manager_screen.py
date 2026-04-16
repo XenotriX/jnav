@@ -5,7 +5,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import OptionList, Static
+from textual.widgets import Footer, OptionList
 from textual.widgets.option_list import Option
 
 from jnav.manager_screen_common import list_option_prompt
@@ -32,29 +32,34 @@ class SelectorManagerScreen(ModalScreen[bool]):
         max-height: 70%;
         border: round $primary;
         background: $background;
+    }
+    #selector-wrapper {
         padding: 1 2;
+        height: auto;
     }
     #selector-list {
         height: auto;
         max-height: 14;
         border: none;
     }
-    #selector-hints {
-        color: $text-muted;
-        margin: 1 0 0 0;
+    #selector-modal Footer {
+        background: transparent;
+    }
+    #selector-modal FooterKey .footer-key--key {
+        color: $primary;
     }
     """
 
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("escape", "maybe_close", "Close", priority=True),
+        Binding("escape", "maybe_close", "Close", priority=True, show=False),
         Binding("q", "maybe_close", show=False),
         Binding("ctrl+c", "maybe_close", show=False),
-        Binding("a", "add", "Add", show=False),
-        Binding("e", "edit", "Edit", show=False),
-        Binding("d", "delete", "Cut", show=False),
-        Binding("y", "yank", "Yank", show=False),
-        Binding("p", "paste", "Paste", show=False),
-        Binding("t", "toggle_item", "Toggle", show=False),
+        Binding("a", "add", "Add"),
+        Binding("e", "edit", "Edit"),
+        Binding("d", "delete", "Cut"),
+        Binding("y", "yank", "Yank"),
+        Binding("p", "paste", "Paste"),
+        Binding("t", "toggle_item", "Toggle"),
         Binding("j", "cursor_down", show=False),
         Binding("k", "cursor_up", show=False),
     ]
@@ -67,11 +72,11 @@ class SelectorManagerScreen(ModalScreen[bool]):
     @override
     def compose(self) -> ComposeResult:
         yield Vertical(
-            OptionList(id="selector-list"),
-            Static(
-                "[b]a[/b]:Add  [b]e[/b]:Edit  [b]t[/b]:Toggle  [b]d[/b]:Cut  [b]y[/b]:Yank  [b]p[/b]:Paste  [b]esc[/b]:Close",
-                id="selector-hints",
+            Vertical(
+                OptionList(id="selector-list"),
+                id="selector-wrapper",
             ),
+            Footer(),
             id="selector-modal",
         )
 
