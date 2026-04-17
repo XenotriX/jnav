@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="39.506081mm"
+   height="39.506084mm"
+   viewBox="0 0 39.506082 39.506083"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <linearGradient
+       id="swatch198">
+      <stop
+         style="stop-color:#6c6dfa;stop-opacity:1;"
+         offset="0"
+         id="stop198" />
+    </linearGradient>
+    <linearGradient
+       id="swatch197">
+      <stop
+         style="stop-color:#e500c5;stop-opacity:1;"
+         offset="0"
+         id="stop197" />
+    </linearGradient>
+    <linearGradient
+       id="swatch196">
+      <stop
+         style="stop-color:#e500c5;stop-opacity:1;"
+         offset="0"
+         id="stop196" />
+    </linearGradient>
+    <linearGradient
+       id="swatch195">
+      <stop
+         style="stop-color:#e500c5;stop-opacity:1;"
+         offset="0"
+         id="stop195" />
+    </linearGradient>
+    <linearGradient
+       id="swatch194">
+      <stop
+         style="stop-color:#e500c5;stop-opacity:1;"
+         offset="0"
+         id="stop194" />
+    </linearGradient>
+    <linearGradient
+       id="swatch193">
+      <stop
+         style="stop-color:#cc5de8;stop-opacity:1;"
+         offset="0"
+         id="stop193" />
+    </linearGradient>
+    <linearGradient
+       id="swatch192">
+      <stop
+         style="stop-color:#cc5de8;stop-opacity:1;"
+         offset="0"
+         id="stop192" />
+    </linearGradient>
+    <linearGradient
+       id="swatch191">
+      <stop
+         style="stop-color:#cc5de8;stop-opacity:1;"
+         offset="0"
+         id="stop191" />
+    </linearGradient>
+    <linearGradient
+       id="swatch190">
+      <stop
+         style="stop-color:#cc5de8;stop-opacity:1;"
+         offset="0"
+         id="stop190" />
+    </linearGradient>
+  </defs>
+  <g
+     id="layer1"
+     transform="translate(-1198.9177,-506.18552)"
+     style="display:inline">
+    <g
+       id="g7"
+       style="display:inline">
+      <rect
+         style="fill:#ffffff;fill-opacity:1;stroke-width:2.49447"
+         id="rect37-6-8-2"
+         width="39.506081"
+         height="39.506081"
+         x="1198.9177"
+         y="506.18552" />
+      <path
+         id="path15-3-9-8-00-9-8"
+         style="font-weight:800;font-family:'JetBrainsMono Nerd Font';-inkscape-font-specification:'JetBrainsMono Nerd Font Ultra-Bold';letter-spacing:-1.04px;white-space:pre;fill:#20c997;fill-opacity:1;stroke-width:2.94084"
+         d="m 1229.4497,510.67283 c 0,8.78051 0,17.56103 0,26.34154 -1.546,0 -3.092,0 -4.6379,0 0,1.39664 0,2.79328 0,4.18992 3.0416,0 6.0833,0 9.125,0 0,-10.17715 0,-20.35431 0,-30.53146 -1.4957,0 -2.9914,0 -4.4871,0 z" />
+      <path
+         style="font-weight:800;font-family:'JetBrainsMono Nerd Font';-inkscape-font-specification:'JetBrainsMono Nerd Font Ultra-Bold';letter-spacing:-1.04px;white-space:pre;fill:#1a1a1a;fill-opacity:1;stroke-width:1.09309"
+         d="m 1218.6709,537.01455 q -3.4423,0 -5.4779,-1.85588 -2.0055,-1.88582 -2.0055,-5.05878 h 4.4901 q 0,1.37695 0.8082,2.21509 0.8082,0.8082 2.1851,0.8082 1.377,0 2.1852,-0.77827 0.8082,-0.80821 0.8082,-2.18515 v -15.29607 h 4.49 v 15.29607 q 0,3.17296 -2.0055,5.02884 -2.0056,1.82595 -5.4779,1.82595 z"
+         id="path14-3-2-6-4-9-9" />
+      <path
+         id="text14-38-5-2-6-6-36"
+         style="font-weight:800;font-family:'JetBrainsMono Nerd Font';-inkscape-font-specification:'JetBrainsMono Nerd Font Ultra-Bold';letter-spacing:-1.04px;white-space:pre;fill:#20c997;fill-opacity:1;stroke-width:2.94084"
+         d="m 1203.4048,510.67283 c 0,10.17715 0,20.35431 0,30.53146 1.4967,0 2.9934,0 4.4902,0 0,-8.78017 0,-17.56034 0,-26.34051 1.5465,0 3.093,0 4.6395,0 0,-1.39698 0,-2.79397 0,-4.19094 -3.0433,0 -6.0865,0 -9.1297,-1e-5 z" />
+    </g>
+  </g>
+</svg>
