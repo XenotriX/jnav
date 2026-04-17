@@ -150,6 +150,8 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
             if self.show_selected_only
             else entry
         )
+        root_data: TreeNodeData = {"path": "", "value": data}
+        self.root.data = root_data
         visitor = TreeBuildVisitor(
             root=self.root,
             add_branch=_detail_add_branch,
