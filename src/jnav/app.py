@@ -115,8 +115,8 @@ class JnavApp(App[None]):
     """
 
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("F", "open_filters", "Filters \uf0c9"),
-        Binding("S", "open_columns", "Selectors \uf0c9"),
+        Binding("F", "open_filters", "Filters ≡"),
+        Binding("S", "open_columns", "Selectors ≡"),
         Binding("d", "toggle_detail", "Toggle Detail"),
         Binding("r", "reset", "Reset"),
         Binding("question_mark", "show_help", "Help", key_display="?"),
