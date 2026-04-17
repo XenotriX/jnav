@@ -657,12 +657,11 @@ class TestRenderLabel:
         assert "OR" in text.plain
 
     @pytest.mark.asyncio
-    async def test_negated_group_prepends_bang(self, fp: FilterProvider) -> None:
+    async def test_negated_group_shows_nand(self, fp: FilterProvider) -> None:
         tree = _make_tree_stub(fp)
         group = FilterGroup(operator="and", negated=True)
         text = tree._render_label(group)
-        assert "!" in text.plain
-        assert "AND" in text.plain
+        assert text.plain == "NAND"
 
     @pytest.mark.asyncio
     async def test_group_with_label_includes_label(self, fp: FilterProvider) -> None:

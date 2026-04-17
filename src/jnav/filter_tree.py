@@ -118,12 +118,16 @@ class FilterTree(Tree[FilterTreeData]):
         if isinstance(node, FilterGroup) and not tree_node.is_expanded:
             style = "" if node.enabled else "dim strike"
             if node.label:
-                return Text(node.label, style=style)
-            preview = build_expression(
-                FilterGroup(operator=node.operator, children=node.children)
-            )
-            if preview:
-                return Text(preview, style=style)
+                label = Text(node.label, style=f"italic {style}")
+            else:
+                preview = build_expression(
+                    FilterGroup(operator=node.operator, children=node.children)
+                )
+                label = Text(preview, style=style) if preview else None
+            if label is not None:
+                if node.negated:
+                    return Text.assemble(("NOT ", f"bold {style}"), label)
+                return label
         return self._render_label(node)
 
     def _populate(
@@ -148,16 +152,33 @@ class FilterTree(Tree[FilterTreeData]):
     def _render_label(self, node: FilterNode) -> Text:
         style = "" if node.enabled else "dim strike"
         if isinstance(node, FilterGroup):
-            op = node.operator.upper()
-            if node.negated:
-                op = f"! {op}"
+            op_hint = (
+                ("", "") if not node.label else (f" ({node.operator.upper()})", "dim")
+            )
             if node.label:
-                return Text.assemble((f"{op} ", style), (node.label, "dim"))
+                label_style = f"italic {style}"
+                if node.negated:
+                    return Text.assemble(
+                        ("NOT ", f"bold {style}"),
+                        (node.label, label_style),
+                        op_hint,
+                    )
+                return Text.assemble((node.label, label_style), op_hint)
+            if node.negated:
+                op = "NAND" if node.operator == "and" else "NOR"
+            else:
+                op = node.operator.upper()
             return Text(op, style=style)
 
-        display = node.label or node.expr
-        icon = "\uf05e" if node.negated else "󱓜"
-        return Text(f"{icon} {display}", style=style)
+        if node.label:
+            display_style = f"italic {style}"
+            display = node.label
+        else:
+            display_style = style
+            display = node.expr
+        if node.negated:
+            return Text.assemble(("NOT ", f"bold {style}"), (display, display_style))
+        return Text(display, style=display_style)
 
     def _cursor_data(self) -> FilterTreeData | None:
         node = self.cursor_node
