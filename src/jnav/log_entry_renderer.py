@@ -16,6 +16,7 @@ from .store import IndexedEntry
 @dataclass(frozen=True)
 class EntryStyles:
     text: Style
+    newline: Style
     levels: dict[str, Style]
     highlight: Style
     cursor_bg: Style
@@ -55,6 +56,7 @@ class LogEntryRenderer:
             self._role_mapper.mapping,
             self._search,
             text_style=styles.text,
+            newline_style=styles.newline,
             level_styles=styles.levels,
             highlight_style=styles.highlight,
         )

@@ -37,6 +37,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         "summary--level-debug",
         "summary--level-trace",
         "summary--text",
+        "summary--newline",
         "summary--search-highlight",
         "summary--cursor",
         "tree--key",
@@ -71,6 +72,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         & > .summary--level-debug { color: $success; text-style: bold; }
         & > .summary--level-trace { color: $success; text-style: bold; }
         & > .summary--text { color: $foreground; }
+        & > .summary--newline { color: $text-muted; }
         & > .summary--cursor { background: $primary 30%; }
         & > .summary--search-highlight { color: $background; background: $accent; }
         & > .tree--background { background: $background-darken-1; }
@@ -116,6 +118,9 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         blended = base_bg.blend(cursor_color, cursor_color.a)
         return EntryStyles(
             text=self.get_component_rich_style("summary--text", partial=True),
+            newline=Style(
+                color=self.get_component_rich_style("summary--newline").color
+            ),
             levels={
                 comp: self.get_component_rich_style(comp, partial=True)
                 for comp in LEVEL_COMPONENTS.values()

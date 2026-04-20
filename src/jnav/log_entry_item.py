@@ -59,10 +59,12 @@ def render_summary(
     search: SearchEngine | None = None,
     *,
     text_style: Style | None = None,
+    newline_style: Style | None = None,
     level_styles: dict[str, Style] | None = None,
     highlight_style: Style | None = None,
 ) -> Text:
     _ts = text_style or Style()
+    _nl = newline_style or _ts
     _hl = highlight_style or Style()
     parts: list[str | tuple[str, str | Style]] = [" "]
 
@@ -87,7 +89,11 @@ def render_summary(
     if mapping.message is not None:
         msg_val = parsed.expanded.get(mapping.message)
         msg_str = str(msg_val) if msg_val or msg_val == 0 else ""
-        parts.append((msg_str, _ts))
+        msg_str = msg_str.replace("\r\n", "\n").replace("\r", "\n")
+        for i, seg in enumerate(msg_str.split("\n")):
+            if i > 0:
+                parts.append(("↵ ", _nl))
+            parts.append((seg, _ts))
 
     text = Text.assemble(*parts)
     text.no_wrap = True
