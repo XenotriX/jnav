@@ -105,6 +105,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         filters: FilterProvider,
         search: SearchEngine,
         role_mapper: RoleMapper,
+        show_selected_only: bool = False,
         id: str | None = None,
     ) -> None:
         super().__init__(label, id=id)
@@ -112,6 +113,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         self._filters = filters
         self._search = search
         self._role_mapper = role_mapper
+        self.show_selected_only = show_selected_only
 
     def on_focus(self) -> None:
         if self.parent is not None:

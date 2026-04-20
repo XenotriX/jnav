@@ -8,6 +8,7 @@ from textual.containers import Horizontal, Vertical
 from textual.theme import Theme
 from textual.widgets import Footer, Static
 
+from jnav.detail_panel import DetailPanel
 from jnav.filter_manager_screen import FilterManagerScreen
 from jnav.filter_provider import FilterProvider
 from jnav.header import Header
@@ -21,7 +22,6 @@ from jnav.state import AppState
 from jnav.text_input_screen import TextInputScreen
 from jnav.virtual_list_view import VirtualListView
 
-from .detail_tree import DetailTree
 from .log_list_view import LogListView
 from .store import IndexedEntry
 
@@ -77,13 +77,6 @@ class JnavApp(App[AppState]):
             opacity: 1.0;
             & > #filter-bar { color: $primary; }
         }
-    }
-    #detail-panel {
-        width: 40%;
-        border: round $background-lighten-2;
-        border-title-align: center;
-        background: $background;
-        &.focused { border: round $primary; }
     }
     """
 
@@ -163,16 +156,13 @@ class JnavApp(App[AppState]):
                 FilterBar(id="filter-bar"),
                 id="log-panel",
             ),
-            Vertical(
-                DetailTree(
-                    "entry",
-                    selectors=self._selectors,
-                    filters=self._filter_provider,
-                    search=self._search,
-                    role_mapper=self._role_mapper,
-                    id="detail-tree",
-                ),
-                id="detail-panel",
+            DetailPanel(
+                selectors=self._selectors,
+                filter_provider=self._filter_provider,
+                search=self._search,
+                role_mapper=self._role_mapper,
+                visible=self._detail_visible,
+                show_selected_only=self._show_selected_only,
             ),
             id="content-area",
         )
@@ -187,12 +177,6 @@ class JnavApp(App[AppState]):
         lv.set_expanded_mode(self._expanded_mode)
         lv.focus()
 
-        detail_panel = self.query_one("#detail-panel")
-        detail_panel.border_title = "Detail"
-        detail_panel.display = self._detail_visible
-        detail_tree = self.query_one("#detail-tree", DetailTree)
-        detail_tree.show_selected_only = self._show_selected_only
-
         self.call_after_refresh(self._initial_build)
 
     async def _initial_build(self) -> None:
@@ -200,8 +184,7 @@ class JnavApp(App[AppState]):
         self._update_filter_bar()
 
     def to_state(self) -> AppState:
-        detail = self.query_one("#detail-tree", DetailTree)
-        panel = self.query_one("#detail-panel")
+        panel = self.query_one(DetailPanel)
         lv = self.query_one("#log-list", LogListView)
         return AppState(
             filter_root=self._filter_provider.root,
@@ -211,7 +194,7 @@ class JnavApp(App[AppState]):
             filtering_enabled=self._model.filtering_enabled,
             expanded_mode=lv.expanded_mode,
             detail_visible=bool(panel.display),
-            show_selected_only=detail.show_selected_only,
+            show_selected_only=panel.show_selected_only,
             entry_index=lv.current_index(),
         )
 
@@ -295,21 +278,18 @@ class JnavApp(App[AppState]):
         self.notify("No more matches", timeout=1)
 
     def action_toggle_detail(self) -> None:
-        panel = self.query_one("#detail-panel")
+        panel = self.query_one(DetailPanel)
         if panel.display:
-            panel.display = False
             self._focus_main()
-        else:
-            panel.display = True
+        panel.display = not panel.display
 
     def action_inspect(self) -> None:
         lv = self.query_one("#log-list", LogListView)
         if self.focused != lv:
             return
-        panel = self.query_one("#detail-panel")
-        if not panel.display:
-            panel.display = True
-        self.query_one("#detail-tree", DetailTree).focus()
+        panel = self.query_one(DetailPanel)
+        panel.display = True
+        panel.focus()
 
     async def action_reset(self) -> None:
         await self._selectors.clear_selectors()
@@ -318,19 +298,19 @@ class JnavApp(App[AppState]):
         self.notify("Filters and fields cleared", timeout=2)
 
     def action_focus_list(self) -> None:
-        if self.query_one("#detail-panel").display:
+        if self.query_one(DetailPanel).display:
             self.query_one("#log-list", LogListView).focus()
 
     def action_focus_detail(self) -> None:
-        if self.query_one("#detail-panel").display:
-            self.query_one("#detail-tree", DetailTree).focus()
+        panel = self.query_one(DetailPanel)
+        if panel.display:
+            panel.focus()
 
     def action_show_help(self) -> None:
         self.push_screen(HelpScreen())
 
     async def action_escape(self) -> None:
-        tree = self.query_one("#detail-tree", DetailTree)
-        if self.focused == tree:
+        if self.query_one(DetailPanel).has_focus_within:
             self._focus_main()
         elif self._search.active:
             await self._search.clear()
@@ -339,7 +319,7 @@ class JnavApp(App[AppState]):
     def on_log_highlighted(self, event: VirtualListView.Highlighted) -> None:
         ie = event.item
         if isinstance(ie, IndexedEntry):
-            self.query_one("#detail-tree", DetailTree).show_entry(ie.entry, ie.index)
+            self.query_one(DetailPanel).show_entry(ie.entry, ie.index)
 
     @on(VirtualListView.Selected, "#log-list")
     def on_log_selected(self, event: VirtualListView.Selected) -> None:
