@@ -87,6 +87,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         filter_provider: FilterProvider,
         id: str | None = None,
         follow: bool,
+        expanded_mode: bool = True,
     ) -> None:
         super().__init__(
             model=model,
@@ -99,7 +100,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         self._selectors = selectors
         self._search = search
         self._filter_provider = filter_provider
-        self._expanded_mode: bool = True
+        self._expanded_mode: bool = expanded_mode
         self._renderer = LogEntryRenderer(
             search=search,
             role_mapper=role_mapper,
@@ -168,6 +169,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
             self._on_fields_or_search_changed
         )
         await self._search.on_change.subscribe_async(self._on_fields_or_search_changed)
+        self.call_after_refresh(self.initial_build)
 
     async def _on_fields_or_search_changed(self, _: None) -> None:
         self.refresh()

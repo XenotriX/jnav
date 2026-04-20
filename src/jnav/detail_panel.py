@@ -1,7 +1,9 @@
 from typing import ClassVar, Self, override
 
 from textual.app import ComposeResult
+from textual.binding import Binding, BindingType
 from textual.containers import Vertical
+from textual.message import Message
 
 from jnav.detail_tree import DetailTree
 from jnav.filter_provider import FilterProvider
@@ -14,6 +16,9 @@ from jnav.selector_provider import SelectorProvider
 class DetailPanel(Vertical):
     BORDER_TITLE: ClassVar[str] = "Detail"
 
+    class Closed(Message):
+        pass
+
     DEFAULT_CSS = """
     DetailPanel {
         width: 40%;
@@ -23,6 +28,10 @@ class DetailPanel(Vertical):
         &.focused { border: round $primary; }
     }
     """
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "close", show=False),
+    ]
 
     def __init__(
         self,
@@ -69,3 +78,6 @@ class DetailPanel(Vertical):
     def focus(self, scroll_visible: bool = True) -> Self:
         self._tree.focus(scroll_visible)
         return self
+
+    def action_close(self) -> None:
+        self.post_message(self.Closed())
