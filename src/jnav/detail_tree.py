@@ -59,7 +59,18 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         "tree--search-highlight",
     }
 
-    DEFAULT_CSS = ""
+    DEFAULT_CSS = """
+    DetailTree {
+        background: $background;
+        & > .tree--guides { color: $background-lighten-2; }
+        & > .tree--guides-selected { color: $foreground; }
+        &:focus {
+            background-tint: transparent;
+            & > .tree--guides { color: $background-lighten-2; }
+            & > .tree--guides-selected { color: $foreground; }
+        }
+    }
+    """
 
     if TYPE_CHECKING:
         app = getters.app(App[None])

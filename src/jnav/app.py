@@ -30,25 +30,20 @@ logger = logging.getLogger(__name__)
 
 
 class FilterBar(Static):
-    pass
+    DEFAULT_CSS = """
+    FilterBar {
+        height: 1;
+        padding: 0 1;
+        color: $text-muted;
+        background: $background;
+    }
+    """
 
 
 class JnavApp(App[None]):
     ENABLE_COMMAND_PALETTE = False
 
     DEFAULT_CSS = """
-    JnavApp Footer {
-        background: $surface;
-    }
-    JnavApp FooterKey {
-        margin: 0 1 0 0;
-    }
-    JnavApp FooterKey .footer-key--key {
-        color: $primary;
-    }
-    """
-
-    CSS = """
     * {
         scrollbar-size-vertical: 1;
         scrollbar-color: $surface-lighten-2;
@@ -61,56 +56,35 @@ class JnavApp(App[None]):
     ModalScreen {
         background: $background 0%;
     }
-    HeaderIcon { display: none; }
-    Header.-tall { height: 1; }
+    JnavApp {
+        Footer { background: $surface; }
+        FooterKey {
+            margin: 0 1 0 0;
+            .footer-key--key { color: $primary; }
+        }
+    }
     .tree--key { color: $primary; text-style: italic; }
     .tree--key-selected { color: $primary; text-style: bold; }
     .tree--value { color: $foreground; }
     .tree--value-null { color: $foreground; text-style: dim italic; }
     .tree--json-string { color: $warning; text-style: italic; }
     .tree--search-highlight { color: $background; background: $accent; }
-    .summary--search-highlight { color: $background; background: $accent; }
     #content-area {
         height: 1fr;
     }
-    #filter-bar {
-        height: 1;
-        padding: 0 1;
-        color: $text-muted;
-        background: $background;
-    }
     #log-panel {
         opacity: 0.75;
-    }
-    #log-panel.focused {
-        opacity: 1.0;
-    }
-    #log-panel.focused > #filter-bar {
-        color: $primary;
-    }
-    #log-list:focus {
-        background-tint: transparent;
+        &.focused {
+            opacity: 1.0;
+            & > #filter-bar { color: $primary; }
+        }
     }
     #detail-panel {
         width: 40%;
         border: round $background-lighten-2;
         border-title-align: center;
         background: $background;
-    }
-    #detail-panel.focused {
-        border: round $primary;
-    }
-    #detail-tree {
-        background: $background;
-    }
-    #detail-tree:focus {
-        background-tint: transparent;
-    }
-    #detail-tree > .tree--guides {
-        color: $background-lighten-2;
-    }
-    #detail-tree > .tree--guides-selected {
-        color: $foreground;
+        &.focused { border: round $primary; }
     }
     """
 

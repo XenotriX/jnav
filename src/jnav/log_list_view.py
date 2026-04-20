@@ -62,6 +62,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
     LogListView {
         height: 1fr;
         background: $background;
+        &:focus { background-tint: transparent; }
         & > .summary--level-error { color: $error; text-style: bold; }
         & > .summary--level-fatal { color: $error; text-style: bold; }
         & > .summary--level-critical { color: $error; text-style: bold; }
@@ -71,6 +72,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         & > .summary--level-trace { color: $success; text-style: bold; }
         & > .summary--text { color: $foreground; }
         & > .summary--cursor { background: $primary 30%; }
+        & > .summary--search-highlight { color: $background; background: $accent; }
         & > .tree--background { background: $background-darken-1; }
     }
     """
