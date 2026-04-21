@@ -183,7 +183,7 @@ class LogListPanel(Vertical):
         bar = self.query_one("#status-bar", StatusBar)
         total = self._model.total_count()
         shown = len(self._model.visible_indices)
-        n_cols = sum(1 for s in self._selectors.selectors if s["enabled"])
+        n_cols = sum(1 for s in self._selectors.selectors if s.enabled)
 
         parts: list[str] = [f"Showing {shown}/{total}"]
         if n_cols:

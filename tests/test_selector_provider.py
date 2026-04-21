@@ -19,7 +19,7 @@ class TestSelectorMutations:
 
         await sp.add_selector("data.role")
 
-        assert sp.selectors == [{"path": "data.role", "enabled": True}]
+        assert sp.selectors == [Selector(path="data.role", enabled=True)]
         assert len(events) == 1
 
     @pytest.mark.asyncio
@@ -36,7 +36,7 @@ class TestSelectorMutations:
 
         await sp.insert_selector(1, "b")
 
-        assert [s["path"] for s in sp.selectors] == ["a", "b", "c"]
+        assert [s.path for s in sp.selectors] == ["a", "b", "c"]
 
     @pytest.mark.asyncio
     async def test_toggle_selector(self, sp: SelectorProvider) -> None:
@@ -46,7 +46,7 @@ class TestSelectorMutations:
         await sp.on_change.subscribe_async(collect)
         await sp.toggle_selector(0)
 
-        assert sp.selectors[0]["enabled"] is False
+        assert sp.selectors[0].enabled is False
         assert len(events) == 1
 
     @pytest.mark.asyncio
@@ -59,7 +59,7 @@ class TestSelectorMutations:
         await sp.remove_selector(0)
 
         assert len(sp.selectors) == 1
-        assert sp.selectors[0]["path"] == "b"
+        assert sp.selectors[0].path == "b"
         assert len(events) == 1
 
     @pytest.mark.asyncio
@@ -69,7 +69,7 @@ class TestSelectorMutations:
 
         await sp.remove_selector_by_path("a")
 
-        assert [s["path"] for s in sp.selectors] == ["b"]
+        assert [s.path for s in sp.selectors] == ["b"]
 
     @pytest.mark.asyncio
     async def test_edit_selector(self, sp: SelectorProvider) -> None:
@@ -79,14 +79,14 @@ class TestSelectorMutations:
         await sp.on_change.subscribe_async(collect)
         await sp.edit_selector(0, "new.path")
 
-        assert sp.selectors[0]["path"] == "new.path"
+        assert sp.selectors[0].path == "new.path"
         assert len(events) == 1
 
     @pytest.mark.asyncio
     async def test_set_selectors(self, sp: SelectorProvider) -> None:
         selectors: list[Selector] = [
-            {"path": "a", "enabled": True},
-            {"path": "b", "enabled": False},
+            Selector(path="a", enabled=True),
+            Selector(path="b", enabled=False),
         ]
 
         events, collect = make_signal_collector()
