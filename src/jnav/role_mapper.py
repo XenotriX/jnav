@@ -3,6 +3,7 @@ from typing import Any
 from aioreactive import AsyncSubject
 
 from jnav.field_mapping import FieldMapping, detect_role_updates
+from jnav.json_model import JsonObject
 from jnav.store import IndexedEntry
 
 
@@ -27,9 +28,10 @@ class RoleMapper:
     async def discover(self, entries: list[IndexedEntry]) -> None:
         """Discover fields from a list of entries. Updates the mapping if new roles are detected."""
         for ie in entries:
+            assert isinstance(ie.entry.expanded, dict)
             await self.discover_from_entry(ie.entry.expanded)
 
-    async def discover_from_entry(self, entry: dict[str, Any]) -> None:
+    async def discover_from_entry(self, entry: JsonObject) -> None:
         """Discover fields from a single entry. Updates the mapping if new roles are detected."""
         new_fields = entry.keys() - self._all_fields
         self._all_fields.update(new_fields)

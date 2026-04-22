@@ -3,10 +3,12 @@ import json
 import math
 import re
 from collections.abc import Iterable, Sequence
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Literal, cast
 
 import jq
 from pydantic import BaseModel, Discriminator, Field
+
+from jnav.json_model import JsonValue, to_json
 
 
 class Filter(BaseModel):
@@ -39,7 +41,7 @@ def _compile_jq(expression: str):
 
 def apply_jq_filter(
     expression: str,
-    entries: list[dict[str, Any]],
+    entries: list[JsonValue],
 ) -> tuple[list[int], str | None]:
     try:
         prog = _compile_jq(expression)
@@ -101,7 +103,7 @@ def build_expression(node: FilterNode) -> str | None:
 
 def apply_filter_tree(
     root: FilterGroup,
-    entries: list[dict[str, Any]],
+    entries: list[JsonValue],
 ) -> tuple[list[int], str | None]:
     """Apply a filter tree to a list of entries."""
     combined = build_expression(root)
@@ -126,9 +128,10 @@ def check_filter_warning(expression: str) -> str | None:
     return None
 
 
-def get_nested(entry: dict[str, Any], path: str) -> object:
+def get_nested(entry: JsonValue, path: str) -> JsonValue:
     try:
-        results = _compile_jq(path).input_value(entry).all()
+        json = to_json(entry)
+        results = cast(list[JsonValue], _compile_jq(path).input_text(json).all())
     except ValueError:
         return None
     if len(results) == 1:
@@ -160,7 +163,7 @@ def _jq_path_to_str(parts: Sequence[str | int]) -> str:
     return result
 
 
-def resolve_selected_paths(columns: Iterable[str], entry: dict[str, Any]) -> set[str]:
+def resolve_selected_paths(columns: Iterable[str], entry: JsonValue) -> set[str]:
     """Expand jq column expressions into concrete paths for a specific entry."""
     result: set[str] = set()
     for col in columns:
@@ -170,8 +173,9 @@ def resolve_selected_paths(columns: Iterable[str], entry: dict[str, Any]) -> set
         jq_path = col
         try:
             raw = jq.compile(f"[path({jq_path})]").input_value(entry).first()
+            assert isinstance(raw, list)
             for parts in raw:
-                result.add(_jq_path_to_str(parts))
+                result.add(_jq_path_to_str(cast(Sequence[str | int], parts)))
             continue
         except ValueError:
             pass
@@ -179,8 +183,9 @@ def resolve_selected_paths(columns: Iterable[str], entry: dict[str, Any]) -> set
             results = jq.compile(jq_path).input_value(entry).all()
             base_expr = jq_path.split("|")[0].strip()
             raw_bases = jq.compile(f"[path({base_expr})]").input_value(entry).first()
+            assert isinstance(raw_bases, list)
             for base_parts in raw_bases:
-                base = _jq_path_to_str(base_parts)
+                base = _jq_path_to_str(cast(Sequence[str | int], base_parts))
                 for r in results:
                     if isinstance(r, dict):
                         r = cast(dict[str, object], r)

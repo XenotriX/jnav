@@ -68,6 +68,8 @@ def render_summary(
     _hl = highlight_style or Style()
     parts: list[str | tuple[str, str | Style]] = [" "]
 
+    assert isinstance(parsed.expanded, dict)
+
     if mapping.timestamp is not None:
         ts_val = parsed.expanded.get(mapping.timestamp.path)
         if ts_val not in (None, ""):

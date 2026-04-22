@@ -2,11 +2,12 @@ from typing import Any, cast
 
 from aioreactive import AsyncSubject
 
+from jnav.json_model import JsonValue
 from jnav.log_model import LogModel
 from jnav.store import IndexedEntry
 
 
-def entry_matches_search(entry: dict[str, Any], term_lower: str) -> bool:
+def entry_matches_search(entry: JsonValue, term_lower: str) -> bool:
     def _check(obj: object) -> bool:
         if isinstance(obj, str):
             return term_lower in obj.lower()

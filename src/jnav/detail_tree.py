@@ -152,6 +152,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         if self._entry is None:
             return
         entry = self._entry.expanded
+        assert isinstance(entry, dict)
         selected = resolve_selected_paths(self._selectors.active_selectors, entry)
 
         label = f"#{self._entry_index + 1}"
@@ -193,9 +194,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
             ),
             search_term=self._search.term,
         )
-        walk_tree(
-            value=data, path="", visitor=visitor, json_paths=self._entry.expanded_paths
-        )
+        walk_tree(value=data, path="", visitor=visitor)
         self.root.expand_all()
         if self._collapsed_paths:
             self._apply_collapse_state(self.root)

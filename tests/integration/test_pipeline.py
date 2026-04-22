@@ -39,6 +39,8 @@ class TestRxPipe:
             results.append(item)
 
         assert len(results) == 2
+        assert isinstance(results[0].expanded, dict)
+        assert isinstance(results[1].expanded, dict)
         assert results[0].expanded["level"] == "INFO"
         assert results[1].expanded["level"] == "ERROR"
 
@@ -70,8 +72,12 @@ class TestFullPipeline:
             await store.append_entries(batch)
 
         assert len(store) == len(SAMPLE_LINES)
-        assert store.get(0).entry.expanded["message"] == "hello"
-        assert store.get(1).entry.expanded["message"] == "boom"
+        first = store.get(0).entry.expanded
+        second = store.get(1).entry.expanded
+        assert isinstance(first, dict)
+        assert isinstance(second, dict)
+        assert first["message"] == "hello"
+        assert second["message"] == "boom"
 
     @pytest.mark.asyncio
     async def test_lines_reach_model_via_subscribe(self) -> None:

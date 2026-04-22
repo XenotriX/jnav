@@ -20,6 +20,7 @@ from jnav.filtering import (
     resolve_selected_paths,
     text_search_expr,
 )
+from jnav.json_model import JsonValue
 
 
 @pytest.fixture(autouse=True)
@@ -47,7 +48,7 @@ class TestCompileJq:
 
 class TestApplyJqFilter:
     def test_filter_matches_subset_of_entries(self) -> None:
-        entries = [
+        entries: list[JsonValue] = [
             {"level": "INFO"},
             {"level": "ERROR"},
             {"level": "INFO"},
@@ -67,12 +68,12 @@ class TestApplyJqFilter:
         assert error is None
 
     def test_results_with_only_none_and_false_excludes_entry(self) -> None:
-        entries = [{"a": None, "b": False}]
+        entries: list[JsonValue] = [{"a": None, "b": False}]
         indices, _ = apply_jq_filter(".a, .b", entries)
         assert indices == []
 
     def test_results_with_one_truthy_includes_entry(self) -> None:
-        entries = [{"a": None, "b": "value"}]
+        entries: list[JsonValue] = [{"a": None, "b": "value"}]
         indices, _ = apply_jq_filter(".a, .b", entries)
         assert indices == [0]
 
@@ -92,12 +93,12 @@ class TestApplyJqFilter:
         assert indices == [0]
 
     def test_empty_results_excludes_entry(self) -> None:
-        entries = [{"a": 1}]
+        entries: list[JsonValue] = [{"a": 1}]
         indices, _ = apply_jq_filter(".missing // empty", entries)
         assert indices == []
 
     def test_per_entry_value_error_skipped(self) -> None:
-        entries = [
+        entries: list[JsonValue] = [
             {"a": "10"},
             {"a": "not-a-number"},
             {"a": "20"},
@@ -107,17 +108,17 @@ class TestApplyJqFilter:
         assert error is None
 
     def test_multi_result_filter_includes_when_any_truthy(self) -> None:
-        entries = [{"tags": [None, False, "x"]}]
+        entries: list[JsonValue] = [{"tags": [None, False, "x"]}]
         indices, _ = apply_jq_filter(".tags[]", entries)
         assert indices == [0]
 
     def test_multi_result_filter_excludes_when_all_falsy(self) -> None:
-        entries = [{"tags": [None, False, None]}]
+        entries: list[JsonValue] = [{"tags": [None, False, None]}]
         indices, _ = apply_jq_filter(".tags[]", entries)
         assert indices == []
 
     def test_indices_preserve_input_order(self) -> None:
-        entries = [
+        entries: list[JsonValue] = [
             {"keep": True},
             {"keep": False},
             {"keep": True},
@@ -130,7 +131,7 @@ class TestApplyJqFilter:
 
 class TestApplyFilterTree:
     def test_empty_tree_returns_all_indices(self) -> None:
-        entries = [{"a": i} for i in range(5)]
+        entries: list[JsonValue] = [{"a": i} for i in range(5)]
         indices, error = apply_filter_tree(FilterGroup(), entries)
         assert indices == [0, 1, 2, 3, 4]
         assert error is None
@@ -150,7 +151,7 @@ class TestApplyFilterTree:
         assert calls == []
 
     def test_single_leaf_delegates_to_jq(self) -> None:
-        entries = [
+        entries: list[JsonValue] = [
             {"level": "INFO"},
             {"level": "ERROR"},
             {"level": "INFO"},
@@ -161,7 +162,7 @@ class TestApplyFilterTree:
         assert error is None
 
     def test_fully_disabled_returns_all_indices(self) -> None:
-        entries = [{"a": 1}, {"a": 2}]
+        entries: list[JsonValue] = [{"a": 1}, {"a": 2}]
         root = FilterGroup(
             children=[Filter(expr=".a", enabled=False)],
         )
@@ -170,7 +171,7 @@ class TestApplyFilterTree:
         assert error is None
 
     def test_negated_root_group(self) -> None:
-        entries = [
+        entries: list[JsonValue] = [
             {"level": "INFO"},
             {"level": "ERROR"},
             {"level": "INFO"},
@@ -226,7 +227,7 @@ class TestGetNested:
         assert get_nested({"a": 1}, ".[") is None
 
     def test_identity_path_returns_entry(self) -> None:
-        entry = {"a": 1}
+        entry: JsonValue = {"a": 1}
         assert get_nested(entry, ".") == entry
 
     def test_empty_path_returns_none(self) -> None:

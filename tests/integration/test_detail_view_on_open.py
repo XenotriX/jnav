@@ -62,6 +62,7 @@ class TestDetailViewOnOpen:
             assert tree.entry is not None, (
                 "DetailTree has no entry after data arrived post-mount"
             )
+            assert isinstance(tree.entry.expanded, dict)
             assert tree.entry.expanded["message"] == "first"
 
     @pytest.mark.asyncio
@@ -80,6 +81,7 @@ class TestDetailViewOnOpen:
 
             tree = app.query_one("#detail-tree", DetailTree)
             assert tree.entry is not None
+            assert isinstance(tree.entry.expanded, dict)
             assert tree.entry.expanded["message"] == "first"
 
     @pytest.mark.asyncio

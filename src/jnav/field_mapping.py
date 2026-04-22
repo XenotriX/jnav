@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from jnav.json_model import JsonObject
+
 TimestampFormat = Literal["iso8601", "epoch_s", "epoch_ms", "epoch_us", "epoch_ns"]
 
 
@@ -90,7 +92,7 @@ class FieldMapping(BaseModel):
 
 def detect_role_updates(
     mapping: FieldMapping,
-    entry: dict[str, object],
+    entry: JsonObject,
     new_fields: set[str],
 ) -> dict[str, object]:
     """Detect updates to the field mapping based on a new entry.

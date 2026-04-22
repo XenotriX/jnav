@@ -1,14 +1,15 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, cast
 
 import orjson
+
+from jnav.json_model import ExpandedString, JsonValue
 
 
 @dataclass
 class ParsedEntry:
     raw: str
-    expanded: dict[str, Any]
-    expanded_paths: set[str] = field(default_factory=set)
+    expanded: JsonValue
 
 
 def parse_entry(line: str) -> ParsedEntry | None:
@@ -21,72 +22,26 @@ def parse_entry(line: str) -> ParsedEntry | None:
     parsed = _try_parse_json(stripped)
     if not isinstance(parsed, dict):
         return None
-    expanded_paths: set[str] = set()
-    _expand_in_place(
-        parsed,
-        path="",
-        expanded_paths=expanded_paths,
-    )
+    expanded = expand(parsed)
     return ParsedEntry(
         raw=stripped,
-        expanded=parsed,
-        expanded_paths=expanded_paths,
+        expanded=expanded,
     )
 
 
-def _expand_in_place(
-    obj: dict[str, Any] | list[Any],
-    *,
-    path: str,
-    expanded_paths: set[str],
-) -> None:
-    """Recursively replace JSON-encoded string values with their parsed
-    objects, mutating dicts and lists in place."""
-    match obj:
-        case dict():
-            for k, v in obj.items():
-                _expand_slot(
-                    obj,
-                    key=k,
-                    value=v,
-                    child_path=f"{path}.{k}" if path else k,
-                    expanded_paths=expanded_paths,
-                )
-        case list():
-            for i, v in enumerate(obj):
-                _expand_slot(
-                    obj,
-                    key=i,
-                    value=v,
-                    child_path=f"{path}[{i}]",
-                    expanded_paths=expanded_paths,
-                )
-
-
-def _expand_slot(
-    container: dict[str, Any] | list[Any],
-    *,
-    key: str | int,
-    value: object,
-    child_path: str,
-    expanded_paths: set[str],
-) -> None:
-    # If the value is a string, try to parse it as JSON
-    if isinstance(value, str):
+def expand(value: JsonValue) -> JsonValue:
+    """Recursively expand JSON-encoded strings in a JSON value."""
+    if isinstance(value, dict):
+        return {k: expand(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [expand(v) for v in value]
+    elif isinstance(value, str):
         parsed = _try_parse_json(value)
         if parsed is not None:
-            container[key] = parsed  # pyright: ignore[reportArgumentType, reportCallIssue]
-            expanded_paths.add(child_path)
-            value = parsed
-
-    # If the value is now a dict or list, recursively expand it
-    if isinstance(value, (dict, list)):
-        value = cast(dict[str, Any] | list[Any], value)
-        _expand_in_place(
-            value,
-            path=child_path,
-            expanded_paths=expanded_paths,
-        )
+            return ExpandedString(original=value, parsed=expand(parsed))
+        return value
+    else:
+        return value
 
 
 def _try_parse_json(value: str) -> dict[str, Any] | list[Any] | None:

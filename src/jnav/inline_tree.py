@@ -66,10 +66,5 @@ def render_inline_tree(
         search_highlight_style=search_highlight_style or _default,
         search_term=search.term if search else None,
     )
-    walk_tree(
-        value=filtered,
-        path="",
-        visitor=visitor,
-        json_paths=parsed.expanded_paths,
-    )
+    walk_tree(value=filtered, path="", visitor=visitor)
     return tree
