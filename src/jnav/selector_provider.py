@@ -1,10 +1,32 @@
+import functools
+from typing import cast
+
+import jq
 from aioreactive import AsyncSubject
 from pydantic import BaseModel
+
+from jnav.json_model import JsonValue, to_json
+
+
+@functools.lru_cache(maxsize=32)
+def _compile_jq(expression: str):
+    return jq.compile(expression)
 
 
 class Selector(BaseModel):
     path: str
     enabled: bool
+
+    def resolve(self, entry: JsonValue) -> JsonValue:
+        """Extract this selector's value from `entry`."""
+        try:
+            results = _compile_jq(self.path).input_text(to_json(entry)).all()
+            results = cast(list[JsonValue], results)
+        except ValueError:
+            return None
+        if len(results) == 1:
+            return results[0]
+        return results
 
 
 class SelectorProvider:

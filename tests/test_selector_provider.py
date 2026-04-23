@@ -1,6 +1,9 @@
+from typing import Any, cast
+
 import pytest
 import pytest_asyncio
 
+from jnav.json_model import JsonValue
 from jnav.selector_provider import Selector, SelectorProvider
 
 from .conftest import make_signal_collector
@@ -107,6 +110,45 @@ class TestSelectorMutations:
 
         assert sp.selectors == []
         assert len(events) == 1
+
+
+class TestSelectorResolve:
+    def _resolve(self, path: str, entry: dict[str, Any]) -> JsonValue:
+        return Selector(path=path, enabled=True).resolve(cast(JsonValue, entry))
+
+    def test_simple_field(self) -> None:
+        assert self._resolve(".level", {"level": "INFO"}) == "INFO"
+
+    def test_nested_field(self) -> None:
+        assert self._resolve(".a.b", {"a": {"b": 1}}) == 1
+
+    def test_missing_field_returns_none(self) -> None:
+        assert self._resolve(".missing", {"a": 1}) is None
+
+    def test_iteration_with_multiple_results_returns_list(self) -> None:
+        assert self._resolve(".tags[]", {"tags": [1, 2, 3]}) == [1, 2, 3]
+
+    def test_iteration_with_single_result_returns_scalar(self) -> None:
+        assert self._resolve(".tags[]", {"tags": [42]}) == 42
+
+    def test_iteration_with_no_results_returns_empty_list(self) -> None:
+        assert self._resolve(".tags[]", {"tags": []}) == []
+
+    def test_invalid_jq_returns_none(self) -> None:
+        assert self._resolve(".[", {"a": 1}) is None
+
+    def test_identity_path_returns_entry(self) -> None:
+        entry = {"a": 1}
+        assert self._resolve(".", entry) == entry
+
+    def test_empty_path_returns_none(self) -> None:
+        assert self._resolve("", {"a": 1}) is None
+
+    def test_index_into_scalar_returns_none(self) -> None:
+        assert self._resolve(".a.b", {"a": 1}) is None
+
+    def test_string_literal_containing_brackets(self) -> None:
+        assert self._resolve('.msg | contains("[]")', {"msg": "hello[]"}) is True
 
 
 class TestDerivedProperties:
