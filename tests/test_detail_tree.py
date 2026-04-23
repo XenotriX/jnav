@@ -208,7 +208,9 @@ class TestActionAddSelect:
         await dt.action_add_select()
         cast(Mock, dt._selectors.has_selector).assert_called_once_with(".user.id")
         cast(AsyncMock, dt._selectors.add_selector).assert_awaited_once_with(".user.id")
-        cast(AsyncMock, dt._selectors.remove_selector_by_path).assert_not_awaited()
+        cast(
+            AsyncMock, dt._selectors.remove_selector_by_expression
+        ).assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_removes_selector_when_present(self) -> None:
@@ -217,9 +219,9 @@ class TestActionAddSelect:
             has_selector=True,
         )
         await dt.action_add_select()
-        cast(AsyncMock, dt._selectors.remove_selector_by_path).assert_awaited_once_with(
-            ".user.id"
-        )
+        cast(
+            AsyncMock, dt._selectors.remove_selector_by_expression
+        ).assert_awaited_once_with(".user.id")
         cast(AsyncMock, dt._selectors.add_selector).assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -227,7 +229,9 @@ class TestActionAddSelect:
         dt = _make_detail_tree(cursor_data=None)
         await dt.action_add_select()
         cast(AsyncMock, dt._selectors.add_selector).assert_not_awaited()
-        cast(AsyncMock, dt._selectors.remove_selector_by_path).assert_not_awaited()
+        cast(
+            AsyncMock, dt._selectors.remove_selector_by_expression
+        ).assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_cursor_without_data_is_noop(self) -> None:

@@ -66,7 +66,7 @@ class SelectorManagerScreen(Modal):
             ol.add_option(Option(Text(" (no selectors)", style="dim"), disabled=True))
         else:
             for s in selectors:
-                ol.add_option(list_option_prompt(s.path, s.enabled))
+                ol.add_option(list_option_prompt(s.expression, s.enabled))
         if highlight is not None and selectors:
             ol.highlighted = min(highlight, len(selectors) - 1)
 
@@ -89,7 +89,7 @@ class SelectorManagerScreen(Modal):
         selectors = self._sp.selectors
         if idx is None or idx >= len(selectors):
             return
-        self._clipboard = selectors[idx].path
+        self._clipboard = selectors[idx].expression
         await self._sp.remove_selector(idx)
         self._refresh_list(idx)
 
@@ -99,7 +99,7 @@ class SelectorManagerScreen(Modal):
         selectors = self._sp.selectors
         if idx is None or idx >= len(selectors):
             return
-        self._clipboard = selectors[idx].path
+        self._clipboard = selectors[idx].expression
 
     async def action_paste(self) -> None:
         await self._paste_at("after")
@@ -115,10 +115,10 @@ class SelectorManagerScreen(Modal):
         async def on_dismiss(value: str | None) -> None:
             if not value:
                 return
-            path = value.strip()
-            if not path:
+            expression = value.strip()
+            if not expression:
                 return
-            await self._sp.insert_selector(target, path)
+            await self._sp.insert_selector(target, expression)
             self._refresh_list(target)
 
         self.app.push_screen(
@@ -132,15 +132,15 @@ class SelectorManagerScreen(Modal):
         selectors = self._sp.selectors
         if idx is None or idx >= len(selectors):
             return
-        current = selectors[idx].path
+        current = selectors[idx].expression
 
         async def on_dismiss(value: str | None) -> None:
             if not value:
                 return
-            path = value.strip()
-            if not path:
+            expression = value.strip()
+            if not expression:
                 return
-            await self._sp.edit_selector(idx, path)
+            await self._sp.edit_selector(idx, expression)
             self._refresh_list(idx)
 
         self.app.push_screen(

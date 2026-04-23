@@ -20,7 +20,7 @@ class TestSelectorMutations:
 
         await sp.add_selector("data.role")
 
-        assert sp.selectors == [Selector(path="data.role", enabled=True)]
+        assert sp.selectors == [Selector(expression="data.role", enabled=True)]
         assert len(events) == 1
 
     @pytest.mark.asyncio
@@ -37,7 +37,7 @@ class TestSelectorMutations:
 
         await sp.insert_selector(1, "b")
 
-        assert [s.path for s in sp.selectors] == ["a", "b", "c"]
+        assert [s.expression for s in sp.selectors] == ["a", "b", "c"]
 
     @pytest.mark.asyncio
     async def test_toggle_selector(self, sp: SelectorProvider) -> None:
@@ -60,7 +60,7 @@ class TestSelectorMutations:
         await sp.remove_selector(0)
 
         assert len(sp.selectors) == 1
-        assert sp.selectors[0].path == "b"
+        assert sp.selectors[0].expression == "b"
         assert len(events) == 1
 
     @pytest.mark.asyncio
@@ -68,9 +68,9 @@ class TestSelectorMutations:
         await sp.add_selector("a")
         await sp.add_selector("b")
 
-        await sp.remove_selector_by_path("a")
+        await sp.remove_selector_by_expression("a")
 
-        assert [s.path for s in sp.selectors] == ["b"]
+        assert [s.expression for s in sp.selectors] == ["b"]
 
     @pytest.mark.asyncio
     async def test_edit_selector(self, sp: SelectorProvider) -> None:
@@ -80,14 +80,14 @@ class TestSelectorMutations:
         await sp.on_change.subscribe_async(collect)
         await sp.edit_selector(0, "new.path")
 
-        assert sp.selectors[0].path == "new.path"
+        assert sp.selectors[0].expression == "new.path"
         assert len(events) == 1
 
     @pytest.mark.asyncio
     async def test_set_selectors(self, sp: SelectorProvider) -> None:
         selectors: list[Selector] = [
-            Selector(path="a", enabled=True),
-            Selector(path="b", enabled=False),
+            Selector(expression="a", enabled=True),
+            Selector(expression="b", enabled=False),
         ]
 
         events, collect = make_signal_collector()
@@ -112,7 +112,7 @@ class TestSelectorMutations:
 
 class TestSelectorResolve:
     def _sel(self, path: str) -> Selector:
-        return Selector(path=path, enabled=True)
+        return Selector(expression=path, enabled=True)
 
     def test_simple_field(self) -> None:
         assert self._sel(".level").resolve({"level": "INFO"}) == "INFO"
@@ -157,7 +157,7 @@ class TestDerivedProperties:
         await sp.add_selector("b")
         await sp.toggle_selector(1)
 
-        assert [s.path for s in sp.active_selectors] == ["a"]
+        assert [s.expression for s in sp.active_selectors] == ["a"]
 
     @pytest.mark.asyncio
     async def test_active_selectors_preserves_order(self, sp: SelectorProvider) -> None:
@@ -167,7 +167,7 @@ class TestDerivedProperties:
         await sp.add_selector("skip")
         await sp.toggle_selector(3)
 
-        assert [s.path for s in sp.active_selectors] == ["c", "a", "b"]
+        assert [s.expression for s in sp.active_selectors] == ["c", "a", "b"]
 
     @pytest.mark.asyncio
     async def test_has_selector(self, sp: SelectorProvider) -> None:

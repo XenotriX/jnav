@@ -14,13 +14,13 @@ def _compile_jq(expression: str):
 
 
 class Selector(BaseModel):
-    path: str
+    expression: str
     enabled: bool
 
     def resolve(self, entry: JsonValue) -> JsonValue:
         """Extract this selector's value from `entry`."""
         try:
-            results = _compile_jq(self.path).input_text(to_json(entry)).all()
+            results = _compile_jq(self.expression).input_text(to_json(entry)).all()
             results = cast(list[JsonValue], results)
         except ValueError:
             return None
@@ -46,24 +46,24 @@ class SelectorProvider:
     def active_selectors(self) -> list[Selector]:
         return [s for s in self._selectors if s.enabled]
 
-    def has_selector(self, path: str) -> bool:
-        return any(s.path == path for s in self._selectors)
+    def has_selector(self, expression: str) -> bool:
+        return any(s.expression == expression for s in self._selectors)
 
-    async def add_selector(self, path: str) -> None:
-        self._selectors.append(Selector(path=path, enabled=True))
+    async def add_selector(self, expression: str) -> None:
+        self._selectors.append(Selector(expression=expression, enabled=True))
         await self.on_change.asend(None)
 
-    async def insert_selector(self, index: int, path: str) -> None:
-        self._selectors.insert(index, Selector(path=path, enabled=True))
+    async def insert_selector(self, index: int, expression: str) -> None:
+        self._selectors.insert(index, Selector(expression=expression, enabled=True))
         await self.on_change.asend(None)
 
     async def remove_selector(self, index: int) -> None:
         self._selectors.pop(index)
         await self.on_change.asend(None)
 
-    async def remove_selector_by_path(self, path: str) -> None:
+    async def remove_selector_by_expression(self, expression: str) -> None:
         for i, s in enumerate(self._selectors):
-            if s.path == path:
+            if s.expression == expression:
                 self._selectors.pop(i)
                 await self.on_change.asend(None)
                 return
@@ -72,8 +72,8 @@ class SelectorProvider:
         self._selectors[index].enabled = not self._selectors[index].enabled
         await self.on_change.asend(None)
 
-    async def edit_selector(self, index: int, path: str) -> None:
-        self._selectors[index].path = path
+    async def edit_selector(self, index: int, expression: str) -> None:
+        self._selectors[index].expression = expression
         await self.on_change.asend(None)
 
     async def set_selectors(self, selectors: list[Selector]) -> None:

@@ -183,7 +183,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         selections: list[tuple[str | int, JsonValue]]
         if self.show_selected_only:
             selections = [
-                (sel.path, value)
+                (sel.expression, value)
                 for sel in self._selectors.active_selectors
                 if (value := sel.resolve(entry)) is not None
             ]
@@ -260,7 +260,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
             return
         selector = str(node.data["path"])
         if self._selectors.has_selector(selector):
-            await self._selectors.remove_selector_by_path(selector)
+            await self._selectors.remove_selector_by_expression(selector)
         else:
             await self._selectors.add_selector(selector)
 
