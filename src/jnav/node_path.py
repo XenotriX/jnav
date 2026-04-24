@@ -46,12 +46,17 @@ class NodePath:
 
     @override
     def __str__(self) -> str:
-        out = ""
+        if len(self.segments) == 0:
+            return "."
+
+        parts: list[str] = []
         for seg in self.segments:
             if isinstance(seg, int):
-                out += f"[{seg}]"
+                parts.append(f"[{seg}]")
             elif seg.isidentifier():
-                out += f".{seg}"
+                parts.append(f".{seg}")
             else:
-                out += f'["{seg}"]'
-        return out
+                parts.append(f'.["{seg}"]')
+        if isinstance(self.segments[0], int):
+            parts.insert(0, ".")
+        return "".join(parts)

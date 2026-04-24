@@ -1,15 +1,29 @@
+import pytest
 from pytest import raises
 
-from jnav.node_path import NodePath
+from jnav.node_path import NodePath, Segment
 
 
 class TestNodePath:
-    def test_to_string(self):
-        path_str = ".foo.bar[0].baz"
+    @pytest.mark.parametrize(
+        "segments, expected",
+        [
+            ([], "."),
+            (["foo"], ".foo"),
+            (["foo", "bar"], ".foo.bar"),
+            (["foo", "bar", 0], ".foo.bar[0]"),
+            (["foo", "bar", 0, "baz"], ".foo.bar[0].baz"),
+            ([0], ".[0]"),
+            ([0, "foo"], ".[0].foo"),
+            (["@timestamp"], '.["@timestamp"]'),
+            (["$var"], '.["$var"]'),
+        ],
+    )
+    def test_to_string(self, segments: tuple[Segment], expected: str):
 
-        path = NodePath() / "foo" / "bar" / 0 / "baz"
+        path = NodePath(tuple(segments))
 
-        assert str(path) == path_str
+        assert str(path) == expected
 
     def test_resolve(self):
         document = {"foo": {"bar": [{"baz": 42}]}}
