@@ -21,7 +21,7 @@ class TestNodePath:
     )
     def test_to_string(self, segments: tuple[Segment], expected: str):
 
-        path = NodePath(tuple(segments))
+        path = NodePath(*segments)
 
         assert str(path) == expected
 

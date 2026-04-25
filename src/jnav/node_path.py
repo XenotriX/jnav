@@ -8,8 +8,11 @@ Segment = str | int
 class NodePath:
     segments: tuple[Segment, ...] = ()
 
+    def __init__(self, *segments: Segment) -> None:
+        object.__setattr__(self, "segments", segments)
+
     def __truediv__(self, segment: Segment) -> NodePath:
-        return NodePath(self.segments + (segment,))
+        return NodePath(*self.segments + (segment,))
 
     def __len__(self) -> int:
         return len(self.segments)
@@ -22,7 +25,7 @@ class NodePath:
 
     def __getitem__(self, i: int | slice) -> Segment | NodePath:
         if isinstance(i, slice):
-            return NodePath(self.segments[i])
+            return NodePath(*self.segments[i])
         return self.segments[i]
 
     def resolve(self, document: object) -> object:
