@@ -41,7 +41,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         "summary--search-highlight",
         "summary--cursor",
         "tree--key",
-        "tree--key-selected",
+        "tree--selector",
         "tree--value",
         "tree--value-null",
         "tree--json-string",
@@ -130,9 +130,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
             ),
             cursor_bg=Style(bgcolor=blended.rich_color),
             tree_key=self.get_component_rich_style("tree--key", partial=True),
-            tree_key_selected=self.get_component_rich_style(
-                "tree--key-selected", partial=True
-            ),
+            tree_selector=self.get_component_rich_style("tree--selector", partial=True),
             tree_value=self.get_component_rich_style("tree--value", partial=True),
             tree_value_null=self.get_component_rich_style(
                 "tree--value-null", partial=True

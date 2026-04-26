@@ -47,8 +47,8 @@ class JnavApp(App[AppState]):
             .footer-key--key { color: $primary; }
         }
     }
-    .tree--key { color: $primary; text-style: italic; }
-    .tree--key-selected { color: $primary; text-style: bold; }
+    .tree--key { color: $primary; text-style: bold; }
+    .tree--selector { color: $accent; text-style: bold; }
     .tree--value { color: $foreground; }
     .tree--value-null { color: $foreground; text-style: dim italic; }
     .tree--json-string { color: $warning; text-style: italic; }

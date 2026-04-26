@@ -23,7 +23,7 @@ class EntryStyles:
     highlight: Style
     cursor_bg: Style
     tree_key: Style
-    tree_key_selected: Style
+    tree_selector: Style
     tree_value: Style
     tree_value_null: Style
     tree_json_string: Style
@@ -74,6 +74,7 @@ class LogEntryRenderer:
 
         style = TreeStyle(
             key=styles.tree_key,
+            selector=styles.tree_selector,
             value=styles.tree_value,
             null=styles.tree_value_null,
             json_str=styles.tree_json_string,

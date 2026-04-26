@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
     COMPONENT_CLASSES: ClassVar[set[str]] = {
         "tree--key",
-        "tree--key-selected",
+        "tree--selector",
         "tree--value",
         "tree--value-null",
         "tree--json-string",
@@ -151,6 +151,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
     def _resolve_style(self) -> TreeStyle:
         return TreeStyle(
             key=self.get_component_rich_style("tree--key", partial=True),
+            selector=self.get_component_rich_style("tree--selector", partial=True),
             value=self.get_component_rich_style("tree--value", partial=True),
             null=self.get_component_rich_style("tree--value-null", partial=True),
             json_str=self.get_component_rich_style("tree--json-string", partial=True),
@@ -171,24 +172,25 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         style = self._resolve_style()
         search_term = self._search.term
 
-        selections: list[tuple[str | int, JsonValue]]
+        selections: list[tuple[str | int, JsonValue, str | None]]
         if self.show_selected_only:
             selections = [
-                (sel.expression, value)
+                (sel.expression, value, sel.label)
                 for sel in self._selectors.active_selectors
                 if (value := sel.resolve(entry)) is not None
             ]
         else:
-            selections = list(children(entry))
+            selections = [(seg, value, None) for seg, value in children(entry)]
 
-        for seg, value in selections:
+        for seg, value, label in selections:
             render(
                 parent=self.root,
-                path=NodePath() / seg,
+                path=NodePath(seg),
                 value=value,
                 add_node=_detail_add_node,
                 style=style,
                 search_term=search_term,
+                display=label,
             )
 
         self.root.expand_all()

@@ -39,10 +39,11 @@ def render_inline_tree(
     for sel, value in filtered:
         render(
             parent=tree,
-            path=NodePath() / sel.expression,
+            path=NodePath(sel.expression),
             value=value,
             add_node=_add_node,
             style=style,
             search_term=search_term,
+            display=sel.label,
         )
     return tree

@@ -21,6 +21,7 @@ AddNodeFn = Callable[[Any, Text, NodePath, JsonValue], Any]
 @dataclass
 class TreeStyle:
     key: Style
+    selector: Style
     value: Style
     null: Style
     json_str: Style
@@ -48,7 +49,9 @@ def highlight_text(text: Text, term: str | None, style: str | Style) -> Text:
 LabelPart = tuple[str, str | Style]
 
 
-def _key_prefix(seg: Segment, style: TreeStyle) -> LabelPart:
+def _key_prefix(seg: Segment, label: str | None, style: TreeStyle) -> LabelPart:
+    if label is not None:
+        return (label, style.selector)
     if isinstance(seg, int):
         return (f"[{seg}]", "dim")
     return (seg, style.key)
@@ -85,9 +88,10 @@ def _label(
     value: JsonValue,
     style: TreeStyle,
     term: str | None,
+    display: str | None = None,
 ) -> Text:
     label = Text.assemble(
-        _key_prefix(seg, style),
+        _key_prefix(seg, display, style),
         (": ", "dim"),
         _key_body(value, style),
     )
@@ -105,6 +109,7 @@ def render(
     add_node: AddNodeFn,
     style: TreeStyle,
     search_term: str | None = None,
+    display: str | None = None,
 ) -> None:
     """Render `value` as a child of `parent`, labeled by `path[-1]`,
     then recurse into its contents. Scalars terminate naturally because
@@ -116,10 +121,11 @@ def render(
     :param add_node: A callback that adds a child to `parent` with a given label and returns the new child. Called as `add_node(parent, label, path, value)`.
     :param style: Styles to use for rendering.
     :param search_term: If given, a term to highlight in the labels.
+    :param display: If given, use this string as the leaf key prefix instead of `path[-1]`.
     """
     assert len(path) > 0, "render requires a non-root path"
     seg = path[-1]
-    label = _label(seg, value, style, search_term)
+    label = _label(seg, value, style, search_term, display)
     node = add_node(parent, label, path, value)
     for child_seg, child_value in children(value):
         render(

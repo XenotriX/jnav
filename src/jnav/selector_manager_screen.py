@@ -6,7 +6,6 @@ from textual.binding import Binding, BindingType
 from textual.widgets import OptionList
 from textual.widgets.option_list import Option
 
-from jnav.manager_screen_common import list_option_prompt
 from jnav.modal import Modal
 from jnav.selector_provider import Selector, SelectorProvider
 from jnav.text_input_screen import TextInputScreen
@@ -20,17 +19,44 @@ class SelectorManagerScreen(Modal):
     if TYPE_CHECKING:
         app = getters.app(App[None])
 
+    COMPONENT_CLASSES: ClassVar[set[str]] = {
+        "selector-list--expression",
+        "selector-list--expression-disabled",
+        "selector-list--label",
+        "selector-list--label-disabled",
+    }
+
     DEFAULT_CSS = """
     #selector-list {
         height: auto;
         max-height: 14;
         border: none;
+        background: transparent;
+
+        & .option-list--option-highlighted {
+            background: $background-darken-1;
+        }
+    }
+    .selector-list--expression {
+        color: $primary;
+    }
+    .selector-list--expression-disabled {
+        color: $primary;
+        text-style: dim;
+    }
+    .selector-list--label {
+        color: $accent;
+    }
+    .selector-list--label-disabled {
+        color: $accent;
+        text-style: dim;
     }
     """
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("a", "add", "Add"),
         Binding("e", "edit", "Edit"),
+        Binding("r", "rename", "Rename"),
         Binding("d", "delete", "Cut"),
         Binding("y", "yank", "Yank"),
         Binding("p", "paste", "Paste"),
@@ -42,7 +68,7 @@ class SelectorManagerScreen(Modal):
 
     modal_title = "Selectors"
     modal_width = 70
-    footer_columns = 7
+    footer_columns = 4
 
     def __init__(self, selector_provider: SelectorProvider) -> None:
         super().__init__()
@@ -66,7 +92,7 @@ class SelectorManagerScreen(Modal):
             ol.add_option(Option(Text(" (no selectors)", style="dim"), disabled=True))
         else:
             for s in selectors:
-                ol.add_option(list_option_prompt(s.expression, s.enabled))
+                ol.add_option(self.list_option_prompt(s))
         if highlight is not None and selectors:
             ol.highlighted = min(highlight, len(selectors) - 1)
 
@@ -115,10 +141,7 @@ class SelectorManagerScreen(Modal):
         async def on_dismiss(value: str | None) -> None:
             if not value:
                 return
-            expression = value.strip()
-            if not expression:
-                return
-            selector = Selector(expression=expression, enabled=True)
+            selector = Selector(expression=value, enabled=True)
             await self._sp.insert_selector(target, selector)
             self._refresh_list(target)
 
@@ -138,10 +161,7 @@ class SelectorManagerScreen(Modal):
         async def on_dismiss(value: str | None) -> None:
             if not value:
                 return
-            expression = value.strip()
-            if not expression:
-                return
-            await self._sp.edit_selector(idx, expression)
+            await self._sp.edit_selector(idx, value)
             self._refresh_list(idx)
 
         self.app.push_screen(
@@ -149,6 +169,30 @@ class SelectorManagerScreen(Modal):
                 "Edit selector",
                 placeholder="jq selector...",
                 initial_value=current,
+            ),
+            on_dismiss,
+        )
+
+    def action_rename(self) -> None:
+        ol = self.query_one("#selector-list", OptionList)
+        idx = ol.highlighted
+        selectors = self._sp.selectors
+        if idx is None or idx >= len(selectors):
+            return
+
+        async def on_dismiss(label: str | None) -> None:
+            if label is None:
+                return
+            self._sp.selectors[idx].label = label or None
+            await self._sp.on_change.asend(None)
+            self._refresh_list(idx)
+
+        self.app.push_screen(
+            TextInputScreen(
+                "Rename",
+                placeholder=selectors[idx].expression,
+                initial_value=selectors[idx].label or "",
+                allow_empty=True,
             ),
             on_dismiss,
         )
@@ -174,3 +218,19 @@ class SelectorManagerScreen(Modal):
 
         await self._sp.insert_selector(target, self._clipboard.model_copy(deep=True))
         self._refresh_list(target)
+
+    def list_option_prompt(self, selector: Selector) -> Text:
+        suffix = "" if selector.enabled else "-disabled"
+        bullet = "●" if selector.enabled else "○"
+        if selector.label:
+            style = self.get_component_rich_style(
+                f"selector-list--label{suffix}", partial=True
+            )
+            label = Text(selector.label, style=style)
+        else:
+            style = self.get_component_rich_style(
+                f"selector-list--expression{suffix}", partial=True
+            )
+            label = Text(selector.expression, style=style)
+
+        return Text.assemble(" ", bullet, " ", label)

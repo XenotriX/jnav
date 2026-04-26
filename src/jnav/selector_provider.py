@@ -16,6 +16,7 @@ def _compile_jq(expression: str):
 class Selector(BaseModel):
     expression: str
     enabled: bool = True
+    label: str | None = None
 
     def resolve(self, entry: JsonValue) -> JsonValue:
         """Extract this selector's value from `entry`."""

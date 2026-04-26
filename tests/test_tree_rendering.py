@@ -88,6 +88,7 @@ class _FakeNode:
 def _style() -> TreeStyle:
     return TreeStyle(
         key=Style(color="cyan"),
+        selector=Style(color="magenta"),
         value=Style(),
         null=Style(italic=True),
         json_str=Style(color="orange3", italic=True),
