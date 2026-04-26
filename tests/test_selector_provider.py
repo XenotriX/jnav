@@ -35,7 +35,7 @@ class TestSelectorMutations:
         await sp.add_selector("a")
         await sp.add_selector("c")
 
-        await sp.insert_selector(1, "b")
+        await sp.insert_selector(1, Selector(expression="b"))
 
         assert [s.expression for s in sp.selectors] == ["a", "b", "c"]
 

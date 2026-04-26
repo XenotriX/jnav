@@ -8,7 +8,7 @@ from textual.widgets.option_list import Option
 
 from jnav.manager_screen_common import list_option_prompt
 from jnav.modal import Modal
-from jnav.selector_provider import SelectorProvider
+from jnav.selector_provider import Selector, SelectorProvider
 from jnav.text_input_screen import TextInputScreen
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ class SelectorManagerScreen(Modal):
     def __init__(self, selector_provider: SelectorProvider) -> None:
         super().__init__()
         self._sp = selector_provider
-        self._clipboard: str | None = None
+        self._clipboard: Selector | None = None
 
     @override
     def compose_body(self) -> ComposeResult:
@@ -89,7 +89,7 @@ class SelectorManagerScreen(Modal):
         selectors = self._sp.selectors
         if idx is None or idx >= len(selectors):
             return
-        self._clipboard = selectors[idx].expression
+        self._clipboard = selectors[idx]
         await self._sp.remove_selector(idx)
         self._refresh_list(idx)
 
@@ -99,7 +99,7 @@ class SelectorManagerScreen(Modal):
         selectors = self._sp.selectors
         if idx is None or idx >= len(selectors):
             return
-        self._clipboard = selectors[idx].expression
+        self._clipboard = selectors[idx].model_copy(deep=True)
 
     async def action_paste(self) -> None:
         await self._paste_at("after")
@@ -118,7 +118,8 @@ class SelectorManagerScreen(Modal):
             expression = value.strip()
             if not expression:
                 return
-            await self._sp.insert_selector(target, expression)
+            selector = Selector(expression=expression, enabled=True)
+            await self._sp.insert_selector(target, selector)
             self._refresh_list(target)
 
         self.app.push_screen(
@@ -171,5 +172,5 @@ class SelectorManagerScreen(Modal):
         else:
             target = self._insert_position_for(idx, position)
 
-        await self._sp.insert_selector(target, self._clipboard)
+        await self._sp.insert_selector(target, self._clipboard.model_copy(deep=True))
         self._refresh_list(target)

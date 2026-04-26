@@ -53,8 +53,8 @@ class SelectorProvider:
         self._selectors.append(Selector(expression=expression, enabled=True))
         await self.on_change.asend(None)
 
-    async def insert_selector(self, index: int, expression: str) -> None:
-        self._selectors.insert(index, Selector(expression=expression, enabled=True))
+    async def insert_selector(self, index: int, selector: Selector) -> None:
+        self._selectors.insert(index, selector)
         await self.on_change.asend(None)
 
     async def remove_selector(self, index: int) -> None:
