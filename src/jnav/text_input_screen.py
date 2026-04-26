@@ -37,11 +37,14 @@ class TextInputScreen(ModalScreen[str | None]):
         title: str = "Search",
         placeholder: str = "search term...",
         initial_value: str = "",
+        *,
+        allow_empty: bool = False,
     ) -> None:
         super().__init__()
         self._title = title
         self._placeholder = placeholder
         self._initial_value = initial_value
+        self._allow_empty = allow_empty
 
     @override
     def compose(self) -> ComposeResult:
@@ -57,7 +60,10 @@ class TextInputScreen(ModalScreen[str | None]):
     @on(Input.Submitted, "#text-input")
     def on_submitted(self, event: Input.Submitted) -> None:
         term = event.value.strip()
-        self.dismiss(term if term else None)
+        if not term and not self._allow_empty:
+            self.dismiss(None)
+        else:
+            self.dismiss(term)
 
     def action_close(self) -> None:
         self.dismiss(None)
