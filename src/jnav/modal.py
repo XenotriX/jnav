@@ -54,7 +54,6 @@ class Modal(ModalScreen[bool], ABC, metaclass=_ModalMeta):
     def compose(self) -> ComposeResult:
         yield Vertical(
             Vertical(*self.compose_body(), classes="modal-body"),
-            WrappingFooter(columns=self.footer_columns),
             classes="modal-box",
         )
 
@@ -65,6 +64,7 @@ class Modal(ModalScreen[bool], ABC, metaclass=_ModalMeta):
         box = self.query_one(".modal-box", Vertical)
         box.border_title = self.modal_title
         box.styles.width = self.modal_width
+        box.mount(WrappingFooter(columns=self.footer_columns))
 
     def action_maybe_close(self) -> None:
         self.dismiss(True)

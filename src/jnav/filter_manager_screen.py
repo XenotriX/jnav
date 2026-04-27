@@ -45,7 +45,6 @@ class FilterManagerScreen(Modal):
 
     @override
     def on_mount(self) -> None:
-        self.query_one("#filter-tree", FilterTree).focus()
         self._update_preview()
 
     @on(FilterTree.Changed)
