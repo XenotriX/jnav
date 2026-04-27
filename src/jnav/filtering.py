@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 import jq
 from pydantic import BaseModel, Discriminator, Field
 
-from jnav.json_model import JsonValue
+from jnav.json_model import JsonValue, to_json
 
 
 class Filter(BaseModel):
@@ -49,7 +49,8 @@ def apply_jq_filter(
     matched: list[int] = []
     for i, entry in enumerate(entries):
         try:
-            results = prog.input_value(entry).all()
+            json = to_json(entry)
+            results = prog.input_text(json).all()
             if any(r is not None and r is not False for r in results):
                 matched.append(i)
         except ValueError:
