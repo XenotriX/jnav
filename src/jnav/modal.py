@@ -46,9 +46,14 @@ class Modal(ModalScreen[bool], ABC, metaclass=_ModalMeta):
         Binding("ctrl+c", "maybe_close", show=False),
     ]
 
-    modal_title: ClassVar[str] = ""
+    modal_title: str = ""
     modal_width: ClassVar[int] = 60
     footer_columns: ClassVar[int] = 4
+
+    def __init__(self, *, title: str | None = None) -> None:
+        super().__init__()
+        if title is not None:
+            self.modal_title = title
 
     @override
     def compose(self) -> ComposeResult:
