@@ -8,6 +8,7 @@ from textual.containers import Horizontal
 from textual.theme import Theme
 from textual.widgets import Footer
 
+from jnav.confirm_modal import ConfirmModal
 from jnav.detail_panel import DetailPanel
 from jnav.filter_manager_screen import FilterManagerScreen
 from jnav.filter_provider import FilterProvider
@@ -173,11 +174,22 @@ class JnavApp(App[AppState]):
             self.query_one(LogListPanel).focus()
         panel.display = not panel.display
 
-    async def action_reset(self) -> None:
-        await self._selectors.clear_selectors()
-        await self._search.clear()
-        await self._filter_provider.clear_filters()
-        self.notify("Filters and fields cleared", timeout=2)
+    def action_reset(self) -> None:
+        async def on_dismiss(confirmed: bool | None) -> None:
+            if not confirmed:
+                return
+            await self._selectors.clear_selectors()
+            await self._search.clear()
+            await self._filter_provider.clear_filters()
+            self.notify("Filters and fields cleared", timeout=2)
+
+        self.push_screen(
+            ConfirmModal(
+                title="Reset Configuration?",
+                prompt="This will clear all filters and selectors.",
+            ),
+            on_dismiss,
+        )
 
     def action_focus_list(self) -> None:
         self.query_one(LogListPanel).focus()
