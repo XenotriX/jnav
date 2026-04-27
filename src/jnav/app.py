@@ -48,6 +48,10 @@ class JnavApp(App[AppState]):
             .footer-key--key { color: $primary; }
         }
     }
+    Tree {
+        & > .tree--cursor { background: $background-darken-1; }
+        &:focus > .tree--cursor { background: $background-darken-1; }
+    }
     .tree--key { color: $primary; text-style: bold; }
     .tree--selector { color: $accent; text-style: bold; }
     .tree--value { color: $foreground; }

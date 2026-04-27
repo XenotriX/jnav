@@ -6,7 +6,6 @@ from rich.text import Text
 from textual import on
 from textual.binding import Binding, BindingType
 from textual.message import Message
-from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
 
 from jnav.filter_provider import FilterProvider
@@ -18,6 +17,7 @@ from jnav.filtering import (
     check_filter_warning,
 )
 from jnav.text_input_screen import TextInputScreen
+from jnav.tree import Tree
 
 if TYPE_CHECKING:
     from textual import getters

@@ -8,7 +8,6 @@ from rich.text import Text
 from textual import on
 from textual.binding import Binding, BindingType
 from textual.events import Key
-from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
 
 from .filter_provider import FilterProvider
@@ -21,6 +20,7 @@ from .parsing import ParsedEntry
 from .role_mapper import RoleMapper
 from .search_engine import SearchEngine
 from .selector_provider import SelectorProvider
+from .tree import Tree
 from .tree_rendering import TreeStyle, render
 
 
