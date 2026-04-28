@@ -1,10 +1,8 @@
-from collections.abc import Generator, Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TypeIs
 
 import orjson
-
-from jnav.node_path import NodePath, Segment
 
 
 @dataclass(frozen=True)
@@ -26,7 +24,7 @@ def is_container(
     return isinstance(value, (dict, list, ExpandedString))
 
 
-def children(value: JsonValue) -> Iterable[tuple[Segment, JsonValue]]:
+def children(value: JsonValue) -> Iterable[tuple[int | str, JsonValue]]:
     if isinstance(value, ExpandedString):
         value = value.parsed
     if isinstance(value, dict):
@@ -34,17 +32,6 @@ def children(value: JsonValue) -> Iterable[tuple[Segment, JsonValue]]:
     if isinstance(value, list):
         return enumerate(value)
     return ()
-
-
-def walk(
-    node: JsonValue,
-    path: NodePath | None = None,
-) -> Generator[tuple[JsonValue, NodePath]]:
-    if path is None:
-        path = NodePath()
-    yield node, path
-    for seg, child in children(node):
-        yield from walk(child, path / seg)
 
 
 def to_json(entry: JsonValue) -> str:

@@ -6,8 +6,8 @@ from typing import Any
 from aioreactive import AsyncSubject
 
 from jnav.field_mapping import FieldMapping, TimestampField, detect_timestamp_format
-from jnav.json_model import JsonObject, JsonValue, walk
-from jnav.node_path import NodePath
+from jnav.json_model import JsonObject, JsonValue
+from jnav.node_path import NodePath, walk
 from jnav.store import IndexedEntry
 
 logger = logging.getLogger(__name__)

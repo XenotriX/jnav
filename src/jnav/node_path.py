@@ -1,5 +1,8 @@
+from collections.abc import Generator
 from dataclasses import dataclass
 from typing import cast, overload, override
+
+from jnav.json_model import JsonValue, children
 
 Segment = str | int
 
@@ -28,7 +31,7 @@ class NodePath:
             return NodePath(*self.segments[i])
         return self.segments[i]
 
-    def resolve(self, document: object) -> object:
+    def resolve(self, document: JsonValue) -> JsonValue:
         node = document
         for seg in self.segments:
             if isinstance(seg, int):
@@ -36,16 +39,19 @@ class NodePath:
                     raise TypeError(
                         f"Expected list at {self}, got {type(node).__name__}"
                     )
-                node = cast(list[object], node)
+                node = cast(list[JsonValue], node)
                 node = node[seg]
             else:
                 if not isinstance(node, dict):
                     raise TypeError(
                         f"Expected dict at {self}, got {type(node).__name__}"
                     )
-                node = cast(dict[str, object], node)
+                node = cast(dict[str, JsonValue], node)
                 node = node[seg]
         return node
+
+    def walk(self, document: JsonValue) -> Generator[tuple[JsonValue, NodePath]]:
+        yield from walk(self.resolve(document), self)
 
     @override
     def __str__(self) -> str:
@@ -63,3 +69,14 @@ class NodePath:
         if isinstance(self.segments[0], int):
             parts.insert(0, ".")
         return "".join(parts)
+
+
+def walk(
+    node: JsonValue,
+    path: NodePath | None = None,
+) -> Generator[tuple[JsonValue, NodePath]]:
+    if path is None:
+        path = NodePath()
+    yield node, path
+    for seg, child in children(node):
+        yield from walk(child, path / seg)
