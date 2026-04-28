@@ -1,18 +1,18 @@
-from typing import Any
-
 import pytest
 import pytest_asyncio
 
+from jnav.field_detector import FieldDiscovery
 from jnav.field_mapping import FieldMapping, TimestampField
+from jnav.json_model import JsonValue
 from jnav.log_entry_item import format_timestamp
+from jnav.node_path import walk
 from jnav.role_mapper import RoleMapper
-from jnav.store import IndexedEntry
 
-from .conftest import make_entry, make_signal_collector
+from .conftest import make_signal_collector
 
 
-def _ie(index: int, data: dict[str, Any]) -> IndexedEntry:
-    return IndexedEntry(index, make_entry(data))
+def _discovery(entry: JsonValue) -> FieldDiscovery:
+    return FieldDiscovery(entry=entry, new_fields=[p for _, p in walk(entry)])
 
 
 @pytest_asyncio.fixture
@@ -20,36 +20,14 @@ async def role_mapper() -> RoleMapper:
     return RoleMapper()
 
 
-class TestDiscover:
-    @pytest.mark.asyncio
-    async def test_populates_all_fields(self, role_mapper: RoleMapper) -> None:
-        await role_mapper.discover([
-            _ie(0, {"level": "INFO", "message": "hi", "extra": 1})
-        ])
-
-        assert ".level" in role_mapper.all_fields
-        assert ".message" in role_mapper.all_fields
-        assert ".extra" in role_mapper.all_fields
-
-    @pytest.mark.asyncio
-    async def test_grows_incrementally(self, role_mapper: RoleMapper) -> None:
-        await role_mapper.discover([_ie(0, {"a": 1})])
-
-        assert role_mapper.all_fields == {".", ".a"}
-
-        await role_mapper.discover([_ie(1, {"a": 2, "b": 3})])
-
-        assert role_mapper.all_fields == {".", ".a", ".b"}
-
-
 class TestDiscoverMappingDetection:
     @pytest.mark.asyncio
     async def test_populates_mapping_from_known_names(
         self, role_mapper: RoleMapper
     ) -> None:
-        await role_mapper.discover([
-            _ie(0, {"ts": "2025-01-01T00:00:00", "level": "INFO", "message": "hi"})
-        ])
+        await role_mapper.detect_roles(
+            _discovery({"ts": "2025-01-01T00:00:00", "level": "INFO", "message": "hi"})
+        )
 
         assert role_mapper.mapping.timestamp == TimestampField(
             path=".ts", format="iso8601"
@@ -61,13 +39,13 @@ class TestDiscoverMappingDetection:
     async def test_keeps_filling_missing_roles_across_batches(
         self, role_mapper: RoleMapper
     ) -> None:
-        await role_mapper.discover([_ie(0, {"level": "INFO"})])
+        await role_mapper.detect_roles(_discovery({"level": "INFO"}))
         assert role_mapper.mapping.level == ".level"
         assert role_mapper.mapping.timestamp is None
 
-        await role_mapper.discover([
-            _ie(1, {"level": "WARN", "ts": "2025-01-01T00:00:00"})
-        ])
+        await role_mapper.detect_roles(
+            _discovery({"level": "WARN", "ts": "2025-01-01T00:00:00"})
+        )
         assert role_mapper.mapping.timestamp == TimestampField(
             path=".ts", format="iso8601"
         )
@@ -76,13 +54,15 @@ class TestDiscoverMappingDetection:
     async def test_does_not_overwrite_already_detected_roles(
         self, role_mapper: RoleMapper
     ) -> None:
-        await role_mapper.discover_from_entry({"ts": "2025-01-01T00:00:00"})
+        await role_mapper.detect_roles(_discovery({"ts": "2025-01-01T00:00:00"}))
         first = role_mapper.mapping.timestamp
 
-        await role_mapper.discover_from_entry({
-            "@timestamp": "2025-01-01T00:00:00",
-            "ts": "2025-01-02T00:00:00",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "@timestamp": "2025-01-01T00:00:00",
+                "ts": "2025-01-02T00:00:00",
+            })
+        )
 
         assert role_mapper.mapping.timestamp == first
 
@@ -90,11 +70,13 @@ class TestDiscoverMappingDetection:
     async def test_stops_once_mapping_is_complete(
         self, role_mapper: RoleMapper
     ) -> None:
-        await role_mapper.discover_from_entry({
-            "ts": "2025-01-01T00:00:00",
-            "level": "INFO",
-            "message": "hi",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "ts": "2025-01-01T00:00:00",
+                "level": "INFO",
+                "message": "hi",
+            })
+        )
         assert role_mapper.mapping.timestamp == TimestampField(
             path=".ts", format="iso8601"
         )
@@ -105,11 +87,13 @@ class TestDiscoverMappingDetection:
         await role_mapper.on_change.subscribe_async(collect)
 
         # Next entry has extra recognizable fields but we shouldn't re-detect
-        await role_mapper.discover_from_entry({
-            "@timestamp": "2025-01-02T00:00:00",
-            "severity": "WARN",
-            "msg": "ho",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "@timestamp": "2025-01-02T00:00:00",
+                "severity": "WARN",
+                "msg": "ho",
+            })
+        )
 
         assert role_mapper.mapping.timestamp == TimestampField(
             path=".ts", format="iso8601"
@@ -131,12 +115,14 @@ class TestDiscoverMappingDetection:
         events, collect = make_signal_collector()
         await role_mapper.on_change.subscribe_async(collect)
 
-        await role_mapper.discover_from_entry({
-            "ts": "2025-01-01T00:00:00",
-            "level": "INFO",
-            "message": "hi",
-            "@timestamp": "2025-01-01T00:00:00",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "ts": "2025-01-01T00:00:00",
+                "level": "INFO",
+                "message": "hi",
+                "@timestamp": "2025-01-01T00:00:00",
+            })
+        )
 
         assert len(events) == 0
 
@@ -146,11 +132,13 @@ class TestDiscoverMappingDetection:
     ) -> None:
         await role_mapper.set_mapping(FieldMapping(level=".level"))
 
-        await role_mapper.discover_from_entry({
-            "ts": "2025-01-01T00:00:00",
-            "level": "INFO",
-            "message": "hi",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "ts": "2025-01-01T00:00:00",
+                "level": "INFO",
+                "message": "hi",
+            })
+        )
 
         assert role_mapper.mapping.timestamp == TimestampField(
             path=".ts", format="iso8601"
@@ -159,24 +147,13 @@ class TestDiscoverMappingDetection:
         assert role_mapper.mapping.message == ".message"
 
     @pytest.mark.asyncio
-    async def test_empty_batch_does_not_trigger_detection(
-        self, role_mapper: RoleMapper
-    ) -> None:
-        events, collect = make_signal_collector()
-        await role_mapper.on_change.subscribe_async(collect)
-
-        await role_mapper.discover([])
-
-        assert len(events) == 0
-
-    @pytest.mark.asyncio
     async def test_fires_on_change_when_detection_updates_mapping(
         self, role_mapper: RoleMapper
     ) -> None:
         events, collect = make_signal_collector()
         await role_mapper.on_change.subscribe_async(collect)
 
-        await role_mapper.discover([_ie(0, {"level": "INFO"})])
+        await role_mapper.detect_roles(_discovery({"level": "INFO"}))
 
         assert len(events) == 1
 
@@ -187,7 +164,7 @@ class TestDiscoverMappingDetection:
         events, collect = make_signal_collector()
         await role_mapper.on_change.subscribe_async(collect)
 
-        await role_mapper.discover([_ie(0, {"weird": "value"})])
+        await role_mapper.detect_roles(_discovery({"weird": "value"}))
 
         assert len(events) == 0
 
@@ -215,11 +192,13 @@ class TestSetMapping:
 class TestKnownFormats:
     @pytest.mark.asyncio
     async def test_logstash_style(self, role_mapper: RoleMapper) -> None:
-        await role_mapper.discover_from_entry({
-            "@timestamp": "2025-01-01T00:00:00",
-            "level": "INFO",
-            "message": "hello",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "@timestamp": "2025-01-01T00:00:00",
+                "level": "INFO",
+                "message": "hello",
+            })
+        )
         assert role_mapper.mapping.timestamp == TimestampField(
             path='.["@timestamp"]', format="iso8601"
         )
@@ -228,11 +207,13 @@ class TestKnownFormats:
 
     @pytest.mark.asyncio
     async def test_bunyan_style(self, role_mapper: RoleMapper) -> None:
-        await role_mapper.discover_from_entry({
-            "time": "2025-01-01T00:00:00",
-            "level": 30,
-            "msg": "hi",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "time": "2025-01-01T00:00:00",
+                "level": 30,
+                "msg": "hi",
+            })
+        )
         assert role_mapper.mapping.timestamp == TimestampField(
             path=".time", format="iso8601"
         )
@@ -241,33 +222,39 @@ class TestKnownFormats:
 
     @pytest.mark.asyncio
     async def test_pino_epoch_ms(self, role_mapper: RoleMapper) -> None:
-        await role_mapper.discover_from_entry({
-            "time": 1_700_000_000_000,
-            "level": 30,
-            "msg": "hi",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "time": 1_700_000_000_000,
+                "level": 30,
+                "msg": "hi",
+            })
+        )
         assert role_mapper.mapping.timestamp == TimestampField(
             path=".time", format="epoch_ms"
         )
 
     @pytest.mark.asyncio
     async def test_zap_ts(self, role_mapper: RoleMapper) -> None:
-        await role_mapper.discover_from_entry({
-            "ts": "2025-01-01T00:00:00",
-            "level": "info",
-            "msg": "hi",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "ts": "2025-01-01T00:00:00",
+                "level": "info",
+                "msg": "hi",
+            })
+        )
         assert role_mapper.mapping.timestamp == TimestampField(
             path=".ts", format="iso8601"
         )
 
     @pytest.mark.asyncio
     async def test_serilog_style(self, role_mapper: RoleMapper) -> None:
-        await role_mapper.discover_from_entry({
-            "@t": "2025-01-01T00:00:00",
-            "@l": "Warning",
-            "@m": "hi",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "@t": "2025-01-01T00:00:00",
+                "@l": "Warning",
+                "@m": "hi",
+            })
+        )
         assert role_mapper.mapping.timestamp == TimestampField(
             path='.["@t"]', format="iso8601"
         )
@@ -278,20 +265,22 @@ class TestKnownFormats:
     async def test_priority_prefers_earlier_candidate(
         self, role_mapper: RoleMapper
     ) -> None:
-        await role_mapper.discover_from_entry({
-            "@timestamp": "2025-01-01T00:00:00",
-            "ts": "2025-01-01T00:00:00",
-            "time": "2025-01-01T00:00:00",
-            "level": "INFO",
-            "message": "hi",
-        })
+        await role_mapper.detect_roles(
+            _discovery({
+                "@timestamp": "2025-01-01T00:00:00",
+                "ts": "2025-01-01T00:00:00",
+                "time": "2025-01-01T00:00:00",
+                "level": "INFO",
+                "message": "hi",
+            })
+        )
         # @timestamp has higher priority than ts/time
         assert role_mapper.mapping.timestamp is not None
         assert role_mapper.mapping.timestamp.path == '.["@timestamp"]'
 
     @pytest.mark.asyncio
     async def test_unknown_format_sets_message(self, role_mapper: RoleMapper) -> None:
-        await role_mapper.discover_from_entry({"weird": "2025-01-01", "value": 42})
+        await role_mapper.detect_roles(_discovery({"weird": "2025-01-01", "value": 42}))
         assert role_mapper.mapping == FieldMapping(message=".")
 
 
@@ -307,9 +296,12 @@ class TestDetectTimestampFormat:
     )
     @pytest.mark.asyncio
     async def test_epoch_magnitude(
-        self, role_mapper: RoleMapper, value: int, expected: str
+        self,
+        role_mapper: RoleMapper,
+        value: int,
+        expected: str,
     ) -> None:
-        await role_mapper.discover_from_entry({"ts": value})
+        await role_mapper.detect_roles(_discovery({"ts": value}))
         assert role_mapper.mapping.timestamp is not None
         assert role_mapper.mapping.timestamp.format == expected
 

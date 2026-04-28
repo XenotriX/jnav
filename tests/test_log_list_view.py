@@ -8,6 +8,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Vertical
 from textual.widget import Widget
 
+from jnav.field_detector import FieldDetector
 from jnav.filter_provider import FilterProvider
 from jnav.log_list_view import LogListView
 from jnav.log_model import LogModel
@@ -92,6 +93,7 @@ class _Harness(App[None]):
         self.store = Store()
         self.filter_provider = FilterProvider()
         self.log_model = LogModel(self.store, self.filter_provider)
+        self.field_detector = FieldDetector()
         self.role_mapper = RoleMapper()
         self.selectors = SelectorProvider()
         self.search = SearchEngine(self.log_model)
@@ -114,6 +116,10 @@ class _Harness(App[None]):
     async def on_mount(self) -> None:
         await self.log_model.start()
         await self.search.start()
+        await self.field_detector.on_discovery.subscribe_async(
+            self.role_mapper.detect_roles
+        )
+        await self.store.on_append.subscribe_async(self.field_detector.process_entries)
         await self.store.append_entries(self._entries)
 
 
@@ -172,8 +178,8 @@ class TestInitialBuild:
             await pilot.pause()
             lv = _query_lv(app)
             await lv.initial_build()
-            assert ".level" in app.role_mapper.all_fields
-            assert ".message" in app.role_mapper.all_fields
+            assert ".level" in app.field_detector.all_fields
+            assert ".message" in app.field_detector.all_fields
             assert lv.index == 0
 
     @pytest.mark.asyncio

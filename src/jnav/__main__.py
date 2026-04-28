@@ -11,6 +11,7 @@ import click
 from platformdirs import user_data_dir
 
 from jnav import state as app_state
+from jnav.field_detector import FieldDetector
 from jnav.filter_provider import FilterProvider
 from jnav.log_model import LogModel
 from jnav.role_mapper import RoleMapper
@@ -71,9 +72,10 @@ async def _run(file: str | None, follow: bool) -> None:
         initial_state = app_state.AppState()
 
     filter_provider = FilterProvider()
-    role_mapper = RoleMapper()
     selectors = SelectorProvider()
     store = Store()
+    field_detector = FieldDetector()
+    role_mapper = RoleMapper()
     model = LogModel(
         store=store,
         filter_provider=filter_provider,
@@ -89,6 +91,8 @@ async def _run(file: str | None, follow: bool) -> None:
 
     await model.start()
     await search.start()
+    await field_detector.on_discovery.subscribe_async(role_mapper.detect_roles)
+    await store.on_append.subscribe_async(field_detector.process_entries)
 
     entry_stream = rx.from_async_iterable(
         buffer_time_or_count(

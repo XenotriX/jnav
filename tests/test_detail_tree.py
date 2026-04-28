@@ -11,6 +11,7 @@ from textual.app import App, ComposeResult
 from textual.binding import BindingsMap
 
 from jnav.detail_tree import DetailTree, TreeNodeData
+from jnav.field_detector import FieldDetector
 from jnav.field_mapping import FieldMapping, TimestampField
 from jnav.filter_provider import FilterProvider
 from jnav.json_model import JsonValue
@@ -405,6 +406,7 @@ class _PilotApp(App[None]):
         self.store = Store()
         self.filter_provider = FilterProvider()
         self.log_model = LogModel(self.store, self.filter_provider)
+        self.field_detector = FieldDetector()
         self.role_mapper = RoleMapper()
         self.selectors = SelectorProvider()
         self.search = SearchEngine(self.log_model)
@@ -423,6 +425,10 @@ class _PilotApp(App[None]):
     async def on_mount(self) -> None:
         await self.log_model.start()
         await self.search.start()
+        await self.field_detector.on_discovery.subscribe_async(
+            self.role_mapper.detect_roles
+        )
+        await self.store.on_append.subscribe_async(self.field_detector.process_entries)
         if self._initial_timestamp is not None:
             await self.role_mapper.set_mapping(
                 FieldMapping(timestamp=self._initial_timestamp)

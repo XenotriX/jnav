@@ -4,6 +4,7 @@ import pytest
 
 from jnav.app import JnavApp
 from jnav.detail_tree import DetailTree
+from jnav.field_detector import FieldDetector
 from jnav.filter_provider import FilterProvider
 from jnav.log_list_view import LogListView
 from jnav.log_model import LogModel
@@ -18,11 +19,14 @@ async def _make_app(*, detail_visible: bool) -> tuple[JnavApp, Store]:
     store = Store()
     filter_provider = FilterProvider()
     model = LogModel(store=store, filter_provider=filter_provider)
+    field_detector = FieldDetector()
     role_mapper = RoleMapper()
     selectors = SelectorProvider()
     search = SearchEngine(model)
     await model.start()
     await search.start()
+    await field_detector.on_discovery.subscribe_async(role_mapper.detect_roles)
+    await store.on_append.subscribe_async(field_detector.process_entries)
     app = JnavApp(
         model=model,
         filter_provider=filter_provider,

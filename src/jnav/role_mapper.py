@@ -5,34 +5,34 @@ from typing import Any
 
 from aioreactive import AsyncSubject
 
+from jnav.field_detector import FieldDiscovery
 from jnav.field_mapping import FieldMapping, TimestampField, detect_timestamp_format
-from jnav.json_model import JsonObject, JsonValue
-from jnav.node_path import NodePath, walk
-from jnav.store import IndexedEntry
+from jnav.json_model import JsonValue
+from jnav.node_path import NodePath
 
 logger = logging.getLogger(__name__)
 
 
-def _build_timestamp(path: NodePath, value: object) -> TimestampField | None:
+def _build_timestamp(path: NodePath, value: JsonValue) -> TimestampField | None:
     fmt = detect_timestamp_format(value)
     return TimestampField(path=str(path), format=fmt) if fmt is not None else None
 
 
-def _build_string_role(path: NodePath, value: object) -> str | None:
+def _build_string_role(path: NodePath, value: JsonValue) -> str | None:
     return str(path) if value not in (None, "") else None
 
 
 def _detect_role_updates(
     mapping: FieldMapping,
-    entry: JsonObject,
-    new_fields: set[NodePath],
-) -> dict[str, object]:
+    entry: JsonValue,
+    new_fields: list[NodePath],
+) -> dict[str, str | TimestampField | None]:
     """Detect updates to the field mapping based on a new entry.
     For each role, if it's not already set in the mapping, check the candidate fields.
     If a candidate field is present in the new fields, attempt to build the role value.
     If successful, add it to the updates dict.
     """
-    updates: dict[str, object] = {}
+    updates: dict[str, str | TimestampField | None] = {}
     current = mapping.assignments()
     for role in ROLES:
         if current[role.name] is not None:
@@ -51,7 +51,7 @@ def _detect_role_updates(
 class RoleSpec:
     name: str
     candidates: list[NodePath]
-    build: Callable[[NodePath, object], object | None]
+    build: Callable[[NodePath, JsonValue], str | TimestampField | None]
 
 
 ROLES: list[RoleSpec] = [
@@ -103,13 +103,8 @@ class RoleMapper:
     on_change: AsyncSubject[None]
 
     def __init__(self) -> None:
-        self._all_fields: set[NodePath] = set()
         self._mapping: FieldMapping = FieldMapping()
         self.on_change = AsyncSubject[None]()
-
-    @property
-    def all_fields(self) -> set[str]:
-        return {str(f) for f in self._all_fields}
 
     @property
     def mapping(self) -> FieldMapping:
@@ -123,20 +118,12 @@ class RoleMapper:
 
         return self._mapping
 
-    async def discover(self, entries: list[IndexedEntry]) -> None:
-        """Discover fields from a list of entries. Updates the mapping if new roles are detected."""
-        for ie in entries:
-            await self.discover_from_entry(ie.entry.expanded)
-
-    async def discover_from_entry(self, entry: JsonValue) -> None:
-        """Discover fields from a single entry. Updates the mapping if new roles are detected."""
-        if not isinstance(entry, dict):
-            return
-        entry_fields = {p for _, p in walk(entry)}
-        new_fields = entry_fields - self._all_fields
-        self._all_fields.update(new_fields)
-
-        updates = _detect_role_updates(self._mapping, entry, new_fields)
+    async def detect_roles(self, discovery: FieldDiscovery) -> None:
+        updates = _detect_role_updates(
+            mapping=self._mapping,
+            entry=discovery.entry,
+            new_fields=discovery.new_fields,
+        )
 
         if not updates:
             return

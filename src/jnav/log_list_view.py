@@ -162,7 +162,6 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
 
     @override
     async def on_mount(self) -> None:
-        await self._log_model.on_append.subscribe_async(self._on_append_discover)
         await self._log_model.on_will_rebuild.subscribe_async(self._on_will_rebuild)
         await self._log_model.on_rebuild.subscribe_async(self._on_rebuild)
         await self._role_mapper.on_change.subscribe_async(
@@ -197,7 +196,6 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         return self._expanded_mode
 
     async def initial_build(self) -> None:
-        await self._role_mapper.discover(self._log_model.all())
         self._rebuild()
         if not self._log_model.is_empty():
             self.index = 0
@@ -214,9 +212,6 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
             self.index = visible.index(store_idx)
         except ValueError:
             pass
-
-    async def _on_append_discover(self, new_entries: list[IndexedEntry]) -> None:
-        await self._role_mapper.discover(new_entries)
 
     async def _on_will_rebuild(self, _: None) -> None:
         # Snapshot cursor state from the OLD view, before the model rebuilds.
