@@ -1,10 +1,12 @@
 import logging
-from typing import ClassVar, override
+from collections.abc import Iterable
+from typing import Any, ClassVar, override
 
 from textual import on
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal
+from textual.screen import Screen
 from textual.theme import Theme
 from textual.widgets import Footer
 
@@ -26,8 +28,6 @@ logger = logging.getLogger(__name__)
 
 
 class JnavApp(App[AppState]):
-    ENABLE_COMMAND_PALETTE = False
-
     DEFAULT_CSS = """
     * {
         scrollbar-size-vertical: 1;
@@ -60,6 +60,63 @@ class JnavApp(App[AppState]):
     .tree--search-highlight { color: $background; background: $accent; }
     #content-area {
         height: 1fr;
+    }
+    """
+
+    CSS = """
+    CommandInput, CommandInput:focus {
+        border: none;
+        height: 1;
+        background-tint: transparent;
+        padding-left: 1;
+    }
+    CommandPalette {
+        background: $background 0%;
+        & > Vertical {
+            margin-top: 3;
+            height: auto;
+            max-height: 70%;
+            width: 90;
+            max-width: 90%;
+            visibility: visible;
+            border: round $primary;
+            background: $background;
+            &:dark { background: $background; }
+        }
+        #--input {
+            border: none;
+            background: transparent;
+            height: auto;
+        }
+        #--input.--list-visible {
+            border-bottom: solid $primary;
+        }
+        SearchIcon {
+            display: none;
+            margin-top: 0;
+        }
+        #--results {
+            overlay: none;
+        }
+        LoadingIndicator {
+            display: none;
+            border-bottom: none;
+        }
+        LoadingIndicator.--visible {
+            display: block;
+        }
+    }
+    CommandList {
+        &, &.--populating {
+            border-top: none;
+            border-bottom: none;
+        }
+        & > .option-list--option {
+            padding-left: 1;
+        }
+        & > .option-list--option-highlighted {
+            background: $background-darken-1;
+        }
     }
     """
 
@@ -143,6 +200,34 @@ class JnavApp(App[AppState]):
             id="content-area",
         )
         yield Footer()
+
+    @override
+    def get_system_commands(self, screen: Screen[Any]) -> Iterable[SystemCommand]:
+        yield SystemCommand(
+            "Quit",
+            "Quit the application as soon as possible",
+            self.action_quit,
+        )
+        yield SystemCommand(
+            "Screenshot",
+            "Save an SVG 'screenshot' of the current screen",
+            lambda: self.set_timer(0.1, self.deliver_screenshot),
+        )
+        yield SystemCommand(
+            "Edit Filters",
+            "Open the filter management screen",
+            self.action_open_filters,
+        )
+        yield SystemCommand(
+            "Edit Selectors",
+            "Open the selector management screen",
+            self.action_open_columns,
+        )
+        yield SystemCommand(
+            "Reset Configuration",
+            "Clear all filters and selectors",
+            self.action_reset,
+        )
 
     def to_state(self) -> AppState:
         detail = self.query_one(DetailPanel)
