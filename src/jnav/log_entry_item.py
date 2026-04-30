@@ -6,7 +6,7 @@ from rich.text import Text
 
 from jnav.selector_provider import Selector
 
-from .field_mapping import FieldMapping, TimestampFormat
+from .field_mapping import RoleMapping, TimestampFormat
 from .parsing import ParsedEntry
 from .search_engine import SearchEngine
 from .tree_rendering import highlight_text
@@ -60,7 +60,7 @@ def _get_level_shorthand(value: str) -> str:
 
 def render_summary(
     parsed: ParsedEntry,
-    mapping: FieldMapping,
+    mapping: RoleMapping,
     search: SearchEngine | None = None,
     *,
     text_style: Style | None = None,
@@ -74,14 +74,14 @@ def render_summary(
     parts: list[str | tuple[str, str | Style]] = [" "]
 
     if mapping.timestamp is not None:
-        sel = Selector(expression=mapping.timestamp.path)
+        sel = Selector(expression=mapping.timestamp.expression)
         ts_val = sel.resolve(parsed.expanded)
         if ts_val not in (None, ""):
             parts.append((format_timestamp(ts_val, mapping.timestamp.format), _ts))
             parts.append(" ")
 
     if mapping.level is not None:
-        sel = Selector(expression=mapping.level)
+        sel = Selector(expression=mapping.level.expression)
         level_val = sel.resolve(parsed.expanded)
         level_str = str(level_val) if level_val else ""
         if level_str:
@@ -94,7 +94,7 @@ def render_summary(
             parts.append(" ")
 
     if mapping.message is not None:
-        sel = Selector(expression=mapping.message)
+        sel = Selector(expression=mapping.message.expression)
         msg_val = sel.resolve(parsed.expanded)
         msg_str = str(msg_val) if msg_val or msg_val == 0 else ""
         msg_str = msg_str.replace("\r\n", "\n").replace("\r", "\n")

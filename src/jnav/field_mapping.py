@@ -6,17 +6,23 @@ from pydantic import BaseModel
 TimestampFormat = Literal["iso8601", "epoch_s", "epoch_ms", "epoch_us", "epoch_ns"]
 
 
-class TimestampField(BaseModel):
-    path: str
+BindingSource = Literal["fallback", "format", "user"]
+
+
+class RoleBinding(BaseModel):
+    expression: str
+
+
+class TimeRoleBinding(RoleBinding):
     format: TimestampFormat
 
 
-class FieldMapping(BaseModel):
-    timestamp: TimestampField | None = None
-    level: str | None = None
-    message: str | None = None
+class RoleMapping(BaseModel):
+    timestamp: TimeRoleBinding | None = None
+    level: RoleBinding | None = None
+    message: RoleBinding | None = None
 
-    def assignments(self) -> dict[str, object | None]:
+    def assignments(self) -> dict[str, RoleBinding | None]:
         return {
             "timestamp": self.timestamp,
             "level": self.level,

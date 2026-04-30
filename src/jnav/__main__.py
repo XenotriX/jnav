@@ -85,7 +85,7 @@ async def _run(file: str | None, follow: bool) -> None:
 
     await filter_provider.set_root(initial_state.filter_root)
     await selectors.set_selectors(initial_state.selectors)
-    await role_mapper.set_mapping(initial_state.role_mapping)
+    await role_mapper.set_overrides(initial_state.role_overrides)
     await model.set_filtering_enabled(initial_state.filtering_enabled)
     await search.set_term(initial_state.search_term)
 

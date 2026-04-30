@@ -12,7 +12,7 @@ from textual.binding import BindingsMap
 
 from jnav.detail_tree import DetailTree, TreeNodeData
 from jnav.field_detector import FieldDetector
-from jnav.field_mapping import FieldMapping, TimestampField
+from jnav.field_mapping import RoleMapping, TimeRoleBinding
 from jnav.filter_provider import FilterProvider
 from jnav.json_model import JsonValue
 from jnav.log_model import LogModel
@@ -61,7 +61,7 @@ def _make_detail_tree(
     dt._search = search
 
     role_mapper = Mock(spec=RoleMapper)
-    role_mapper.mapping = FieldMapping()
+    role_mapper.mapping = RoleMapping()
     dt._role_mapper = role_mapper
 
     cursor_node = None
@@ -401,7 +401,7 @@ class TestActionViewValue:
 
 
 class _PilotApp(App[None]):
-    def __init__(self, *, timestamp: TimestampField | None = None) -> None:
+    def __init__(self, *, timestamp: TimeRoleBinding | None = None) -> None:
         super().__init__()
         self.store = Store()
         self.filter_provider = FilterProvider()
@@ -430,8 +430,8 @@ class _PilotApp(App[None]):
         )
         await self.store.on_append.subscribe_async(self.field_detector.process_entries)
         if self._initial_timestamp is not None:
-            await self.role_mapper.set_mapping(
-                FieldMapping(timestamp=self._initial_timestamp)
+            await self.role_mapper.set_overrides(
+                RoleMapping(timestamp=self._initial_timestamp)
             )
 
 
@@ -581,8 +581,10 @@ class TestRerenderOnSignal:
             tree.show_entry(entry, 0)
             await pilot.pause()
             initial_label = tree.root.label.plain
-            await app.role_mapper.set_mapping(
-                FieldMapping(timestamp=TimestampField(path=".ts", format="iso8601"))
+            await app.role_mapper.set_overrides(
+                RoleMapping(
+                    timestamp=TimeRoleBinding(expression=".ts", format="iso8601")
+                )
             )
             await pilot.pause()
             assert initial_label != tree.root.label.plain

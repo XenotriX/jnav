@@ -150,7 +150,7 @@ class JnavApp(App[AppState]):
         return AppState(
             filter_root=self._filter_provider.root,
             selectors=self._selectors.selectors,
-            role_mapping=self._role_mapper.mapping,
+            role_overrides=self._role_mapper.overrides,
             search_term=self._search.term,
             filtering_enabled=self._model.filtering_enabled,
             expanded_mode=log_list.expanded_mode,

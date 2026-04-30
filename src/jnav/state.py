@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
 
-from jnav.field_mapping import FieldMapping
+from jnav.field_mapping import RoleMapping
 from jnav.filtering import FilterGroup
 from jnav.selector_provider import Selector
 
@@ -10,7 +10,7 @@ from jnav.selector_provider import Selector
 class AppState(BaseModel):
     filter_root: FilterGroup = Field(default_factory=FilterGroup)
     selectors: list[Selector] = Field(default_factory=list)
-    role_mapping: FieldMapping = Field(default_factory=FieldMapping)
+    role_overrides: RoleMapping | None = None
     search_term: str = ""
     filtering_enabled: bool = True
     expanded_mode: bool = True

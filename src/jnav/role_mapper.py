@@ -1,43 +1,69 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 from aioreactive import AsyncSubject
 
 from jnav.field_detector import FieldDiscovery
-from jnav.field_mapping import FieldMapping, TimestampField, detect_timestamp_format
+from jnav.field_mapping import (
+    RoleBinding,
+    RoleMapping,
+    TimeRoleBinding,
+    detect_timestamp_format,
+)
 from jnav.json_model import JsonValue
 from jnav.node_path import NodePath
 
 logger = logging.getLogger(__name__)
 
 
-def _build_timestamp(path: NodePath, value: JsonValue) -> TimestampField | None:
+def _build_timestamp(path: NodePath, value: JsonValue) -> TimeRoleBinding | None:
     fmt = detect_timestamp_format(value)
-    return TimestampField(path=str(path), format=fmt) if fmt is not None else None
+    return (
+        TimeRoleBinding(expression=str(path), format=fmt) if fmt is not None else None
+    )
 
 
-def _build_string_role(path: NodePath, value: JsonValue) -> str | None:
-    return str(path) if value not in (None, "") else None
+def _build_string_role(path: NodePath, value: JsonValue) -> RoleBinding | None:
+    if value in (None, ""):
+        return None
+    return RoleBinding(expression=str(path))
+
+
+@dataclass(frozen=True)
+class RoleSpec:
+    name: str
+    candidates: list[NodePath]
+    build: Callable[[NodePath, JsonValue], RoleBinding | None]
+
+
+def _candidate_priority(role: RoleSpec, binding: RoleBinding | None) -> int:
+    if binding is None:
+        return len(role.candidates)
+    for i, candidate in enumerate(role.candidates):
+        if str(candidate) == binding.expression:
+            return i
+    return len(role.candidates)
 
 
 def _detect_role_updates(
-    mapping: FieldMapping,
+    mapping: RoleMapping,
     entry: JsonValue,
     new_fields: list[NodePath],
-) -> dict[str, str | TimestampField | None]:
+) -> dict[str, RoleBinding | None]:
     """Detect updates to the field mapping based on a new entry.
-    For each role, if it's not already set in the mapping, check the candidate fields.
-    If a candidate field is present in the new fields, attempt to build the role value.
-    If successful, add it to the updates dict.
+
+    For each role, find the highest-priority candidate present in new_fields.
+    If it outranks the currently bound candidate (or the role is unbound),
+    record an update.
     """
-    updates: dict[str, str | TimestampField | None] = {}
+    updates: dict[str, RoleBinding | None] = {}
     current = mapping.assignments()
     for role in ROLES:
-        if current[role.name] is not None:
-            continue
-        for candidate in role.candidates:
+        current_priority = _candidate_priority(role, current[role.name])
+        for i, candidate in enumerate(role.candidates):
+            if i >= current_priority:
+                break
             if candidate not in new_fields:
                 continue
             built = role.build(candidate, candidate.resolve(entry))
@@ -45,13 +71,6 @@ def _detect_role_updates(
                 updates[role.name] = built
                 break
     return updates
-
-
-@dataclass(frozen=True)
-class RoleSpec:
-    name: str
-    candidates: list[NodePath]
-    build: Callable[[NodePath, JsonValue], str | TimestampField | None]
 
 
 ROLES: list[RoleSpec] = [
@@ -91,6 +110,7 @@ ROLES: list[RoleSpec] = [
             NodePath("event"),
             NodePath("Body"),
             NodePath("log"),
+            NodePath(),
         ],
         build=_build_string_role,
     ),
@@ -100,27 +120,29 @@ ROLES: list[RoleSpec] = [
 class RoleMapper:
     """Tracks fields discovered in the data and the timestamp/level/message role mapping."""
 
+    _override: RoleMapping | None
+    _fallback: RoleMapping
     on_change: AsyncSubject[None]
 
     def __init__(self) -> None:
-        self._mapping: FieldMapping = FieldMapping()
+        self._override = None
+        self._fallback = RoleMapping()
+
         self.on_change = AsyncSubject[None]()
 
     @property
-    def mapping(self) -> FieldMapping:
-        if len(self._mapping.missing_roles()) == 3:
-            # If no roles have been assigned, treat all fields as candidates for all roles
-            return FieldMapping(
-                timestamp=None,
-                level=None,
-                message=".",
-            )
+    def mapping(self) -> RoleMapping:
+        return self._resolve_mapping()
 
-        return self._mapping
+    def _resolve_mapping(self) -> RoleMapping:
+        if self._override is not None:
+            return self._override
+
+        return self._fallback
 
     async def detect_roles(self, discovery: FieldDiscovery) -> None:
         updates = _detect_role_updates(
-            mapping=self._mapping,
+            mapping=self._fallback,
             entry=discovery.entry,
             new_fields=discovery.new_fields,
         )
@@ -128,15 +150,41 @@ class RoleMapper:
         if not updates:
             return
 
-        self._mapping = self._mapping.model_copy(update=updates)
+        before = self._resolve_mapping()
+        self._fallback = self._fallback.model_copy(update=updates)
+
+        logger.debug(
+            "Fallback mapping updated",
+            extra={
+                "old_mapping": before.model_dump(),
+                "new_mapping": self._fallback.model_dump(),
+            },
+        )
+        if self._resolve_mapping() == before:
+            logger.debug("Active mapping unchanged (shadowed by override)")
+            return
         await self.on_change.asend(None)
 
-    async def set_mapping(
+    async def set_overrides(
         self,
-        mapping_data: dict[str, Any] | FieldMapping | None,
+        overrides: RoleMapping | None,
     ) -> None:
-        if mapping_data:
-            self._mapping = FieldMapping.model_validate(mapping_data)
+        if overrides == self._override:
+            # No change
+            return
+
+        if overrides:
+            logger.debug(
+                "Override mapping set",
+                extra={"mapping": overrides.model_dump()},
+            )
+            self._override = overrides
         else:
-            self._mapping = FieldMapping()
+            logger.debug("Override mapping cleared")
+            self._override = None
+
         await self.on_change.asend(None)
+
+    @property
+    def overrides(self) -> RoleMapping | None:
+        return self._override
