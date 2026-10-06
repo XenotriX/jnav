@@ -175,7 +175,7 @@ class KeySequenceMixin:
                     continuations.append(
                         Binding(
                             next_char,
-                            f"_seq_cont_{seq.action}",
+                            f"_seq_cont_{len(continuations)}",
                             seq.description,
                             show=seq.show,
                         )

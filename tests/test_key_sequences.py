@@ -8,7 +8,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingsMap
 from textual.events import Key
-from textual.widgets import Static
+from textual.widgets import Footer, Static
 
 from jnav.key_sequences import KeySequence, KeySequenceMixin
 
@@ -539,3 +539,36 @@ class TestPilotIntegration:
             await pilot.pause()
             assert app.called == []
             assert widget.called == []
+
+    @pytest.mark.asyncio
+    async def test_sequence_can_run_namespaced_app_action(self) -> None:
+        class _Widget(KeySequenceMixin, Static, can_focus=True):
+            SEQUENCES: ClassVar[list[KeySequence]] = [
+                KeySequence("fa", "app.app_hit", "app hit"),
+            ]
+            SEQUENCE_GROUPS: ClassVar[dict[str, str]] = {"f": "Filter"}
+
+            async def on_key(self, event: Key) -> None:
+                await self._handle_sequence_key(event)
+
+        class _App(App[None]):
+            called: list[str]
+
+            def __init__(self) -> None:
+                super().__init__()
+                self.called = []
+
+            @override
+            def compose(self) -> ComposeResult:
+                yield _Widget()
+                yield Footer()
+
+            def action_app_hit(self) -> None:
+                self.called.append("app_hit")
+
+        app = _App()
+        async with app.run_test(size=(40, 10)) as pilot:
+            app.query_one(_Widget).focus()
+            await pilot.press("f", "a")
+            await pilot.pause()
+            assert app.called == ["app_hit"]
