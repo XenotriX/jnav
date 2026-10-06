@@ -22,15 +22,8 @@ class RoleMapping(BaseModel):
     level: RoleBinding | None = None
     message: RoleBinding | None = None
 
-    def assignments(self) -> dict[str, RoleBinding | None]:
-        return {
-            "timestamp": self.timestamp,
-            "level": self.level,
-            "message": self.message,
-        }
-
-    def missing_roles(self) -> list[str]:
-        return [name for name, value in self.assignments().items() if value is None]
+    def get(self, name: str) -> RoleBinding | None:
+        return dict(self).get(name)
 
 
 def detect_timestamp_format(value: object) -> TimestampFormat | None:

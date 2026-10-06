@@ -19,6 +19,7 @@ from jnav.help_screen import HelpScreen
 from jnav.log_list_panel import LogListPanel
 from jnav.log_model import LogModel
 from jnav.role_mapper import RoleMapper
+from jnav.role_mapping_screen import RoleMappingScreen
 from jnav.search_engine import SearchEngine
 from jnav.selector_manager_screen import SelectorManagerScreen
 from jnav.selector_provider import SelectorProvider
@@ -224,6 +225,11 @@ class JnavApp(App[AppState]):
             self.action_open_columns,
         )
         yield SystemCommand(
+            "Edit Field Roles",
+            "Choose which fields act as timestamp, level and message",
+            self.action_open_roles,
+        )
+        yield SystemCommand(
             "Reset Configuration",
             "Clear all filters and selectors",
             self.action_reset,
@@ -256,6 +262,9 @@ class JnavApp(App[AppState]):
 
     def action_open_columns(self) -> None:
         self.push_screen(SelectorManagerScreen(self._selectors))
+
+    def action_open_roles(self) -> None:
+        self.push_screen(RoleMappingScreen(self._role_mapper))
 
     def action_toggle_detail(self) -> None:
         panel = self.query_one(DetailPanel)

@@ -58,9 +58,8 @@ def _detect_role_updates(
     record an update.
     """
     updates: dict[str, RoleBinding | None] = {}
-    current = mapping.assignments()
     for role in ROLES:
-        current_priority = _candidate_priority(role, current[role.name])
+        current_priority = _candidate_priority(role, mapping.get(role.name))
         for i, candidate in enumerate(role.candidates):
             if i >= current_priority:
                 break
@@ -188,3 +187,7 @@ class RoleMapper:
     @property
     def overrides(self) -> RoleMapping | None:
         return self._override
+
+    @property
+    def fallback(self) -> RoleMapping:
+        return self._fallback

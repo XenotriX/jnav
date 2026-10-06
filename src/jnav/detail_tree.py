@@ -88,6 +88,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         KeySequence("fn", "filter_has", "has field"),
         KeySequence("vo", "toggle_filter_tree", "show selected only"),
         KeySequence("ve", "view_value", "open in editor"),
+        KeySequence("vR", "app.open_roles", "Field Roles"),
     ]
     SEQUENCE_GROUPS: ClassVar[dict[str, str]] = {"f": "filter ▸", "v": "view ▸"}
 

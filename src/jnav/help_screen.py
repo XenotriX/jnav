@@ -23,6 +23,7 @@ HELP_TEXT = """\
   [b]fp[/b]        Pause/resume filters
   [b]S[/b]         Selected fields manager
   [b]vi[/b]        Toggle inline expanded tree
+  [b]vR[/b]        Field roles
   [b]d[/b]         Toggle detail panel
   [b]r[/b]         Reset filters, fields, search
   [b]?[/b]         This help

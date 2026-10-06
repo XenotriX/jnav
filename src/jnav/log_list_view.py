@@ -56,6 +56,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         KeySequence("ft", "text_filter", "text filter"),
         KeySequence("fp", "toggle_filters_pause", "pause filters"),
         KeySequence("vi", "toggle_expanded", "toggle inline tree"),
+        KeySequence("vR", "app.open_roles", "Field Roles"),
     ]
     SEQUENCE_GROUPS: ClassVar[dict[str, str]] = {"f": "filter ▸", "v": "view ▸"}
 

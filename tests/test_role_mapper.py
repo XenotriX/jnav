@@ -362,10 +362,3 @@ class TestFieldMappingRoundtrip:
     def test_partial_roundtrip(self) -> None:
         mapping = RoleMapping(level=RoleBinding(expression="level"))
         assert RoleMapping.model_validate(mapping.model_dump()) == mapping
-
-    def test_missing_roles(self) -> None:
-        assert RoleMapping().missing_roles() == ["timestamp", "level", "message"]
-        assert RoleMapping(level=RoleBinding(expression="level")).missing_roles() == [
-            "timestamp",
-            "message",
-        ]

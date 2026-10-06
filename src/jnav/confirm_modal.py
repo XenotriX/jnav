@@ -13,6 +13,9 @@ class ConfirmModal(Modal):
         border: round $warning;
         border-title-color: $warning;
     }
+    ConfirmModal .modal-body Label {
+        width: 1fr;
+    }
     ConfirmModal .modal-box FooterKey .footer-key--key {
         color: $warning;
     }
