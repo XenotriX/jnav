@@ -1,4 +1,3 @@
-
 type JsonArray = list[JsonValue]
 type JsonObject = dict[str, JsonValue]
 type JsonValue = JsonObject | JsonArray | str | int | float | bool | None
