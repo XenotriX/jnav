@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cutting and pasting a disabled selected field keeps it disabled.
 - Multi-line messages no longer break the log list layout. Line breaks are shown as `↵`.
 - The detail panel shows the first entry on startup when it was left open in the previous session.
+- Reopening a file puts the cursor back on the entry it was on when the file was closed. If the file got shorter, the cursor goes to the last entry.
 - The key hints at the bottom of the filter manager no longer jump in size when it opens.
 
 ## [1.0.0] - 2026-04-20

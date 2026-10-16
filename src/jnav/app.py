@@ -145,6 +145,7 @@ class JnavApp(App[AppState]):
         detail_visible: bool = False,
         show_selected_only: bool = False,
         collapsed_paths: set[str] | None = None,
+        entry_index: int = 0,
         follow: bool = False,
     ) -> None:
         super().__init__()
@@ -172,6 +173,7 @@ class JnavApp(App[AppState]):
         self._detail_visible = detail_visible
         self._show_selected_only = show_selected_only
         self._collapsed_paths = collapsed_paths
+        self._entry_index = entry_index
         self._start_following = follow
         self._file_name = file_name
         self.sub_title = file_name
@@ -188,6 +190,7 @@ class JnavApp(App[AppState]):
                 role_mapper=self._role_mapper,
                 start_following=self._start_following,
                 expanded_mode=self._expanded_mode,
+                restore_index=self._entry_index,
             ),
             DetailPanel(
                 selectors=self._selectors,

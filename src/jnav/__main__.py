@@ -120,6 +120,7 @@ async def _run(file: str | None, follow: bool) -> None:
         detail_visible=initial_state.detail_visible,
         show_selected_only=initial_state.show_selected_only,
         collapsed_paths=initial_state.collapsed_paths,
+        entry_index=initial_state.entry_index,
         follow=follow,
     )
     app.title = "jnav"

@@ -199,24 +199,28 @@ class VirtualListView[T](Widget, can_focus=True):
     def follow(self) -> bool:
         return self._follow
 
-    def action_cursor_down(self) -> None:
+    def _stop_auto_scroll(self) -> None:
+        """Stop moving the cursor automatically as new entries arrive."""
         self._follow = False
+
+    def action_cursor_down(self) -> None:
+        self._stop_auto_scroll()
         self.cursor_down()
 
     def action_cursor_up(self) -> None:
-        self._follow = False
+        self._stop_auto_scroll()
         self.cursor_up()
 
     def action_scroll_half_down(self) -> None:
-        self._follow = False
+        self._stop_auto_scroll()
         self.scroll_half_down()
 
     def action_scroll_half_up(self) -> None:
-        self._follow = False
+        self._stop_auto_scroll()
         self.scroll_half_up()
 
     def action_jump_top(self) -> None:
-        self._follow = False
+        self._stop_auto_scroll()
         self.index = 0
 
     def action_jump_bottom(self) -> None:
@@ -272,11 +276,11 @@ class VirtualListView[T](Widget, can_focus=True):
         self.refresh()
 
     def on_mouse_scroll_down(self) -> None:
-        self._follow = False
+        self._stop_auto_scroll()
         self._scroll_viewport_down()
 
     def on_mouse_scroll_up(self) -> None:
-        self._follow = False
+        self._stop_auto_scroll()
         self._scroll_viewport_up()
 
     def action_select(self) -> None:

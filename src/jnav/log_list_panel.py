@@ -71,6 +71,7 @@ class LogListPanel(Vertical):
         role_mapper: RoleMapper,
         start_following: bool = True,
         expanded_mode: bool = True,
+        restore_index: int = 0,
     ) -> None:
         super().__init__()
         self._model = model
@@ -80,6 +81,7 @@ class LogListPanel(Vertical):
         self._role_mapper = role_mapper
         self._start_following = start_following
         self._expanded_mode = expanded_mode
+        self._restore_index = restore_index
         self._search_pos: int = -1
 
     @override
@@ -93,6 +95,7 @@ class LogListPanel(Vertical):
             id="log-list",
             follow=self._start_following,
             expanded_mode=self._expanded_mode,
+            restore_index=self._restore_index,
         )
         yield StatusBar(id="status-bar")
 

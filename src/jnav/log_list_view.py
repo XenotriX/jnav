@@ -1,4 +1,5 @@
 from bisect import bisect_left
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, ClassVar, override
 
 from rich.console import RenderableType
@@ -91,6 +92,7 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
         id: str | None = None,
         follow: bool,
         expanded_mode: bool = True,
+        restore_index: int = 0,
     ) -> None:
         super().__init__(
             model=model,
@@ -110,7 +112,15 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
             selectors=selectors,
         )
         self._entry_styles: EntryStyles | None = None
-        self._saved_store_idx: int = 0
+        # Store index the cursor moves to once it has loaded, unless following
+        self._pending_restore_idx: int | None
+        self._saved_store_idx: int
+        if restore_index > 0 and not follow:
+            self._pending_restore_idx = restore_index
+            self._saved_store_idx = restore_index
+        else:
+            self._pending_restore_idx = None
+            self._saved_store_idx = 0
         self._saved_offset: int = 0
 
     def _resolve_styles(self) -> EntryStyles:
@@ -198,8 +208,10 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
 
     async def initial_build(self) -> None:
         self._rebuild()
-        if not self._log_model.is_empty():
-            self.index = 0
+        if self._pending_restore_idx is not None:
+            self._apply_pending_restore()
+        elif self.follow and not self._log_model.is_empty():
+            self.index = self.count() - 1
 
     def current_index(self) -> int:
         visible = self._log_model.visible_indices
@@ -207,7 +219,32 @@ class LogListView(KeySequenceMixin, VirtualListView[IndexedEntry]):
             return visible[self.index]
         return 0
 
+    def _apply_pending_restore(self) -> None:
+        """Move the cursor to the pending restore entry, or to the newest entry until it loads."""
+        target = self._pending_restore_idx
+        if target is None or self._log_model.is_empty():
+            return
+        self.index = self._closest_list_index(target)
+        if self._log_model.total_count() > target:
+            self._pending_restore_idx = None
+
+    @override
+    async def _on_model_append(self, batch: Sequence[IndexedEntry]) -> None:
+        await super()._on_model_append(batch)
+        self._apply_pending_restore()
+
+    @override
+    def _stop_auto_scroll(self) -> None:
+        super()._stop_auto_scroll()
+        self._pending_restore_idx = None
+
+    @override
+    def action_jump_bottom(self) -> None:
+        self._pending_restore_idx = None
+        super().action_jump_bottom()
+
     def jump_to_index(self, store_idx: int) -> None:
+        self._pending_restore_idx = None
         visible = self._log_model.visible_indices
         try:
             self.index = visible.index(store_idx)

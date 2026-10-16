@@ -80,7 +80,7 @@ With `--follow`, jnav watches the file for new lines (like `tail -f`). New entri
 
 ### Session Persistence
 
-Filters, selected fields, scroll position, panel state, and search terms are saved when you quit and restored when reopening the same file. State is stored in `~/.local/share/jnav/`.
+Filters, selected fields, the highlighted entry, panel state, and search terms are saved when you quit and restored when reopening the same file. With `--follow`, the cursor starts on the newest entry instead. State is stored in `~/.local/share/jnav/`.
 
 ## Keybindings
 

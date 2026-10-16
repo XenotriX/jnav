@@ -86,10 +86,14 @@ class _Harness(App[None]):
         *,
         entries: list[ParsedEntry] | None = None,
         wrap_in_parent: bool = False,
+        follow: bool = False,
+        restore_index: int = 0,
     ) -> None:
         super().__init__()
         self._entries = entries or []
         self._wrap_in_parent = wrap_in_parent
+        self._follow = follow
+        self._restore_index = restore_index
         self.store = Store()
         self.filter_provider = FilterProvider()
         self.log_model = LogModel(self.store, self.filter_provider)
@@ -106,7 +110,8 @@ class _Harness(App[None]):
             selectors=self.selectors,
             search=self.search,
             filter_provider=self.filter_provider,
-            follow=False,
+            follow=self._follow,
+            restore_index=self._restore_index,
         )
         if self._wrap_in_parent:
             yield Vertical(lv, id="parent")
@@ -445,3 +450,137 @@ class TestKeyDispatch:
             await pilot.pause()
 
             assert lv.index == 0
+
+
+def _batch(start: int, stop: int) -> list[ParsedEntry]:
+    return [_info(f"m{i}") for i in range(start, stop)]
+
+
+class TestRestoreIndex:
+    @pytest.mark.asyncio
+    async def test_lands_on_saved_entry_when_already_loaded(self):
+        app = _Harness(entries=_batch(0, 10), restore_index=7)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            assert _query_lv(app).current_index() == 7
+
+    @pytest.mark.asyncio
+    async def test_scrolls_saved_entry_into_view(self):
+        app = _Harness(entries=_batch(0, 100), restore_index=80)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            lv = _query_lv(app)
+            assert lv.scroll_top_index <= lv.index
+            assert lv.index - lv.scroll_top_index < lv.size.height
+
+    @pytest.mark.asyncio
+    async def test_tracks_newest_entry_until_saved_entry_arrives(self):
+        app = _Harness(restore_index=7)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            lv = _query_lv(app)
+
+            await app.store.append_entries(_batch(0, 5))
+            await pilot.pause()
+            assert lv.current_index() == 4
+
+            await app.store.append_entries(_batch(5, 10))
+            await pilot.pause()
+            assert lv.current_index() == 7
+
+            await app.store.append_entries(_batch(10, 15))
+            await pilot.pause()
+            assert lv.current_index() == 7
+
+    @pytest.mark.asyncio
+    async def test_lands_on_last_entry_when_file_shrank(self):
+        app = _Harness(entries=_batch(0, 10), restore_index=50)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            assert _query_lv(app).current_index() == 9
+
+    @pytest.mark.asyncio
+    async def test_lands_on_closest_visible_entry_when_saved_entry_is_filtered_out(
+        self,
+    ):
+        app = _Harness(restore_index=2)
+        await app.filter_provider.add_filter('.level == "ERROR"')
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            await app.store.append_entries([
+                _error("a"),
+                _info("b"),
+                _info("c"),
+                _error("d"),
+                _error("e"),
+            ])
+            await pilot.pause()
+            assert _query_lv(app).current_index() == 3
+
+    @pytest.mark.asyncio
+    async def test_follow_ignores_saved_entry(self):
+        app = _Harness(entries=_batch(0, 10), follow=True, restore_index=3)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            lv = _query_lv(app)
+            assert lv.current_index() == 9
+
+            await app.store.append_entries(_batch(10, 15))
+            await pilot.pause()
+            assert lv.current_index() == 14
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "action",
+        [
+            "action_cursor_up",
+            "action_cursor_down",
+            "action_scroll_half_up",
+            "action_scroll_half_down",
+            "action_jump_top",
+            "on_mouse_scroll_up",
+            "on_mouse_scroll_down",
+        ],
+    )
+    async def test_user_navigation_cancels_pending_restore(self, action: str):
+        app = _Harness(restore_index=50)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            lv = _query_lv(app)
+            await app.store.append_entries(_batch(0, 30))
+            await pilot.pause()
+            lv.index = 10
+            getattr(lv, action)()
+            index_after_action = lv.index
+
+            await app.store.append_entries(_batch(30, 60))
+            await pilot.pause()
+            assert lv.index == index_after_action
+
+    @pytest.mark.asyncio
+    async def test_jump_bottom_cancels_pending_restore_and_follows(self):
+        app = _Harness(restore_index=50)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            lv = _query_lv(app)
+            await app.store.append_entries(_batch(0, 30))
+            await pilot.pause()
+            lv.action_jump_bottom()
+
+            await app.store.append_entries(_batch(30, 60))
+            await pilot.pause()
+            assert lv.current_index() == 59
+
+    @pytest.mark.asyncio
+    async def test_jump_to_index_cancels_pending_restore(self):
+        app = _Harness(restore_index=50)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            lv = _query_lv(app)
+            await app.store.append_entries(_batch(0, 30))
+            await pilot.pause()
+            lv.jump_to_index(12)
+
+            await app.store.append_entries(_batch(30, 60))
+            await pilot.pause()
+            assert lv.current_index() == 12
