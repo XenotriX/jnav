@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Messages that are not strings are shown in the summary as compact JSON, such as `{"a":1}`, `false` or `null`, instead of Python-style values like `{'a': 1}` or `False`.
 - Filters and selected fields created from the detail panel work for keys that are not plain identifiers, such as `@timestamp` or `user-id`.
 - Selected fields are shown in the order of the selected fields manager, both in the log list and in the detail panel. Their order used to be random, could change between runs, and did not follow reordering.
 - Cutting and pasting a disabled selected field keeps it disabled.

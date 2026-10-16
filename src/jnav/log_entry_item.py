@@ -1,9 +1,11 @@
 import logging
 from datetime import UTC, datetime
 
+import orjson
 from rich.style import Style
 from rich.text import Text
 
+from jnav.json_model import JsonValue
 from jnav.selector_provider import Selector
 
 from .field_mapping import RoleMapping, TimestampFormat
@@ -58,6 +60,13 @@ def _get_level_shorthand(value: str) -> str:
     return s
 
 
+def _format_message(value: JsonValue) -> str:
+    """Strings render verbatim, any other JSON value renders as compact JSON."""
+    if isinstance(value, str):
+        return value
+    return orjson.dumps(value).decode()
+
+
 def render_summary(
     parsed: ParsedEntry,
     mapping: RoleMapping,
@@ -95,8 +104,7 @@ def render_summary(
 
     if mapping.message is not None:
         sel = Selector(expression=mapping.message.expression)
-        msg_val = sel.resolve(parsed.expanded)
-        msg_str = str(msg_val) if msg_val or msg_val == 0 else ""
+        msg_str = _format_message(sel.resolve(parsed.expanded))
         msg_str = msg_str.replace("\r\n", "\n").replace("\r", "\n")
         for i, seg in enumerate(msg_str.split("\n")):
             if i > 0:
