@@ -32,8 +32,6 @@ class FieldDetector:
             await self.detect_fields(ie.entry.expanded)
 
     async def detect_fields(self, entry: JsonValue) -> None:
-        if not isinstance(entry, dict):
-            return
         entry_fields = {p for _, p in walk(entry)}
         new_fields = entry_fields - self._all_fields
         self._all_fields.update(new_fields)
