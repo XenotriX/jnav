@@ -13,8 +13,8 @@ class ParsedEntry:
 
 def parse_entry(line: str) -> ParsedEntry | None:
     """Parse a JSON line into a ``ParsedEntry`` with nested JSON-encoded
-    strings expanded in place. Returns ``None`` for blank lines, invalid
-    JSON, and JSON that isn't an object."""
+    strings expanded in place. Any top-level JSON value is accepted.
+    Returns ``None`` for blank lines and invalid JSON."""
     stripped = line.strip()
     if not stripped:
         return None
