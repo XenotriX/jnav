@@ -2,6 +2,7 @@ from typing import ClassVar, override
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
+from textual.content import Content
 from textual.widgets import Label
 
 from jnav.modal import Modal
@@ -30,7 +31,7 @@ class ConfirmModal(Modal):
     modal_width = 50
     footer_columns = 2
 
-    def __init__(self, prompt: str, title: str = "Confirm") -> None:
+    def __init__(self, prompt: str | Content, title: str = "Confirm") -> None:
         super().__init__(title=title)
         self._prompt = prompt
 

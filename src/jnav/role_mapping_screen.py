@@ -6,6 +6,7 @@ from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
+from textual.content import Content
 from textual.screen import ModalScreen
 from textual.widgets import OptionList, Static
 from textual.widgets.option_list import Option
@@ -335,10 +336,10 @@ class RoleMappingScreen(Modal):
             return
         await self._apply(overrides.model_copy(update={role: binding}))
 
-    async def _confirm_diff(self, title: str, *blocks: str) -> bool:
+    async def _confirm_diff(self, title: str, *blocks: str | Content) -> bool:
         return bool(
             await self.app.push_screen_wait(
-                ConfirmModal(title=title, prompt="\n\n".join(blocks))
+                ConfirmModal(title=title, prompt=Content("\n\n").join(blocks))
             )
         )
 
@@ -447,20 +448,21 @@ class RoleMappingScreen(Modal):
         role: str,
         current: RoleBinding | None,
         new: RoleBinding | None,
-    ) -> str | None:
+    ) -> Content | None:
         if current == new:
             return None
-        lines = [f"[bold]{_ROLE_LABELS[role]}[/]"]
-        lines.append(f"  [$error]-[/] {self._binding_markup(current)}")
-        lines.append(f"  [$success]+[/] {self._binding_markup(new)}")
-        return "\n".join(lines)
+        return Content("\n").join([
+            Content.styled(_ROLE_LABELS[role], "bold"),
+            Content.assemble(
+                "  ", ("-", "$error"), " ", self._binding_content(current)
+            ),
+            Content.assemble("  ", ("+", "$success"), " ", self._binding_content(new)),
+        ])
 
-    def _binding_markup(self, binding: RoleBinding | None) -> str:
+    def _binding_content(self, binding: RoleBinding | None) -> Content:
         if binding is None:
-            return "[dim italic](unset)[/]"
-        fmt = (
-            f"  [dim]{binding.format}[/]"
-            if isinstance(binding, TimeRoleBinding)
-            else ""
-        )
-        return f"[$primary]{binding.expression}[/]{fmt}"
+            return Content.styled("(unset)", "dim italic")
+        expression = Content.styled(binding.expression, "$primary")
+        if isinstance(binding, TimeRoleBinding):
+            return Content.assemble(expression, "  ", (binding.format, "dim"))
+        return expression

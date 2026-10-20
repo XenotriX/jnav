@@ -2,8 +2,9 @@
 
 import pytest
 from textual.app import App
-from textual.widgets import OptionList
+from textual.widgets import Label, OptionList
 
+from jnav.confirm_modal import ConfirmModal
 from jnav.field_mapping import RoleBinding, RoleMapping, TimeRoleBinding
 from jnav.role_mapper import RoleMapper
 from jnav.role_mapping_screen import _ROLE_LABELS, _ROLE_NAMES, RoleMappingScreen
@@ -134,6 +135,32 @@ class TestRoleMappingScreen:
             await pilot.press("escape")
             await pilot.pause()
             assert rm.overrides is not None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "expression",
+        [".[$x]", '.msg | test("[b]")', ".[/x]"],
+    )
+    async def test_lock_confirmation_shows_expressions_verbatim(
+        self, expression: str
+    ) -> None:
+        rm = _mapper()
+        app = _Host(rm)
+        async with app.run_test() as pilot:
+            await pilot.press("m")
+            await pilot.pause()
+            assert rm.overrides is not None
+            await rm.set_overrides(
+                rm.overrides.model_copy(
+                    update={"level": RoleBinding(expression=expression)}
+                )
+            )
+            await pilot.press("m")
+            await pilot.pause()
+            assert isinstance(app.screen, ConfirmModal)
+            prompt = str(app.screen.query_one(Label).render())
+            assert f"- {expression}\n" in prompt
+            assert "+ .level" in prompt
 
     def test_every_role_has_a_label(self) -> None:
         assert set(_ROLE_LABELS) == set(_ROLE_NAMES)
