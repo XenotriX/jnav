@@ -6,7 +6,7 @@
   </picture>
 </p>
 
-A TUI viewer and navigator for structured log files.
+A TUI viewer and navigator for JSON log files, and any other JSONL file.
 
 ![screenshot](https://github.com/XenotriX/jnav/blob/360911e954d91e267616508384ca2e7814c22913/screenshot.png)
 
@@ -28,7 +28,7 @@ pipx install jnav
 # Open a log file
 $ jnav app.log
 
-# Follow the file for new entries (like tail -f)
+# Follow the file for new entries
 $ jnav --follow app.log
 
 # Pipe JSONL from stdin
@@ -65,10 +65,20 @@ Selectors are jq expressions evaluated per entry, rendered inline next to the su
 .request.headers.user_agent            # deep path
 ```
 
-Add from the detail panel with `s`, or open the selectors manager with `S` to add, edit, reorder, and toggle them.
+Add from the detail panel with `s`, or open the selectors manager with `S` to edit them. They can be given a custom name, shown instead of the jq expression, toggled, and reordered by cutting and pasting.
 
 
 https://github.com/user-attachments/assets/a9e93048-c3e8-44e6-9f82-727b8e9f8d10
+
+### Field Roles
+
+Fields can be assigned a role that gives them special treatment: timestamp, log level, or message. Roles are detected automatically, even in nested fields, and the summary of each entry is built from them. When no role is detected, the summary shows the whole entry, so any JSONL file can be browsed, even lines that are arrays, strings, or numbers.
+
+Open the Field Roles dialog with `vR` or from the command palette to see which fields are used or customize them.
+
+### Command Palette
+
+`Ctrl+P` opens the command palette to search and run actions.
 
 ### JSON String Expansion
 
@@ -80,7 +90,7 @@ With `--follow`, jnav watches the file for new lines (like `tail -f`). New entri
 
 ### Session Persistence
 
-Filters, selected fields, the highlighted entry, panel state, and search terms are saved when you quit and restored when reopening the same file. With `--follow`, the cursor starts on the newest entry instead. State is stored in `~/.local/share/jnav/`.
+Filters, selected fields, the highlighted entry, panel state, custom field roles, and search terms are saved when you quit and restored when reopening the same file. With `--follow`, the cursor starts on the newest entry instead. State is stored in the platform's user data directory, such as `~/.local/share/jnav/` on Linux.
 
 ## Keybindings
 
@@ -109,13 +119,15 @@ Filters, selected fields, the highlighted entry, panel state, and search terms a
 
 ### Display
 
-| Key  | Action                                   |
-| ---- | ---------------------------------------- |
-| `S`  | Selected fields manager                  |
-| `vi` | Toggle inline expanded tree in list rows |
-| `d`  | Toggle detail panel                      |
-| `?`  | Help                                     |
-| `q`  | Quit                                     |
+| Key      | Action                                   |
+| -------- | ---------------------------------------- |
+| `S`      | Selected fields manager                  |
+| `vR`     | Field Roles dialog                       |
+| `vi`     | Toggle inline expanded tree in list rows |
+| `d`      | Toggle detail panel                      |
+| `Ctrl+P` | Command palette                          |
+| `?`      | Help                                     |
+| `q`      | Quit                                     |
 
 ### Detail Panel
 
@@ -126,31 +138,44 @@ Filters, selected fields, the highlighted entry, panel state, and search terms a
 | `fn` | Filter: entries that have this field     |
 | `ve` | View the value in `$EDITOR`              |
 | `vo` | Show only selected fields                |
+| `vR` | Field Roles dialog                       |
 
 ### Filter Manager
 
-| Key             | Action                     |
-| --------------- | -------------------------- |
-| `a`             | Add filter clause          |
-| `g`             | Add group                  |
-| `e`             | Edit clause                |
-| `d` / `y` / `p` | Cut / yank / paste         |
-| `t`             | Enable / disable           |
-| `o`             | Toggle AND / OR on a group |
-| `n`             | Negate                     |
-| `c`             | Flatten group              |
-| `r`             | Rename                     |
-| `Escape`        | Close                      |
+| Key                   | Action                           |
+| --------------------- | -------------------------------- |
+| `a`                   | Add filter clause                |
+| `g`                   | Add group                        |
+| `e`                   | Edit clause                      |
+| `d` / `y` / `p` / `P` | Cut / yank / paste / paste above |
+| `t`                   | Enable / disable                 |
+| `o`                   | Toggle AND / OR on a group       |
+| `n`                   | Negate                           |
+| `c`                   | Flatten group                    |
+| `r`                   | Rename                           |
+| `Escape`              | Close                            |
 
 ### Selected Fields Manager
 
-| Key             | Action             |
-| --------------- | ------------------ |
-| `a`             | Add selector       |
-| `e`             | Edit selector      |
-| `d` / `y` / `p` | Cut / yank / paste |
-| `t`             | Enable / disable   |
-| `Escape`        | Close              |
+| Key                   | Action                           |
+| --------------------- | -------------------------------- |
+| `a`                   | Add selector                     |
+| `e`                   | Edit selector                    |
+| `r`                   | Rename                           |
+| `d` / `y` / `p` / `P` | Cut / yank / paste / paste above |
+| `t`                   | Enable / disable                 |
+| `Escape`              | Close                            |
+
+### Field Roles
+
+| Key      | Action                             |
+| -------- | ---------------------------------- |
+| `m`      | Switch between detected and custom |
+| `e`      | Edit the role's field              |
+| `d`      | Clear the role                     |
+| `r`      | Restore the detected field         |
+| `f`      | Change the timestamp format        |
+| `Escape` | Close                              |
 
 ## Credits
 
