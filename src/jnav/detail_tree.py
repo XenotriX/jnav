@@ -231,7 +231,7 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
             return
         path = node.data["path"]
         value = node.data["value"]
-        if isinstance(value, (dict, list)):
+        if is_container(value):
             return
         expr = f"{path} == {jq_value_literal(value)}"
         await self._filters.add_filter(expr)

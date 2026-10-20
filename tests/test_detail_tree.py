@@ -149,6 +149,17 @@ class TestActionFilterValue:
         cast(AsyncMock, dt._filters.add_filter).assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_expanded_string_value_is_noop(self) -> None:
+        dt = _make_detail_tree(
+            cursor_data={
+                "path": NodePath() / "payload",
+                "value": ExpandedString(original='{"k": 1}', parsed={"k": 1}),
+            }
+        )
+        await dt.action_filter_value()
+        cast(AsyncMock, dt._filters.add_filter).assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_no_cursor_is_noop(self) -> None:
         dt = _make_detail_tree(cursor_data=None)
         await dt.action_filter_value()
