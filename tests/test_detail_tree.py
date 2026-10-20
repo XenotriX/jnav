@@ -14,7 +14,7 @@ from jnav.detail_tree import DetailTree, TreeNodeData
 from jnav.field_detector import FieldDetector
 from jnav.field_mapping import RoleMapping, TimeRoleBinding
 from jnav.filter_provider import FilterProvider
-from jnav.json_model import JsonValue
+from jnav.json_model import ExpandedString, JsonValue
 from jnav.log_model import LogModel
 from jnav.node_path import NodePath
 from jnav.role_mapper import RoleMapper
@@ -335,6 +335,51 @@ class TestActionViewValue:
         dt.action_view_value()
         assert captured["argv"][1].endswith(".json")
         assert captured["content"] == json.dumps(value, indent=2)
+
+    def test_expanded_string_writes_parsed_json(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        value = ExpandedString(original='{"k": 1}', parsed={"k": 1})
+        dt = _make_detail_tree(
+            cursor_data={"path": NodePath() / "payload", "value": value}
+        )
+        _install_app_mock(dt, monkeypatch)
+        captured: dict[str, Any] = {}
+
+        def fake_run(argv: list[str], *args: Any, **kwargs: Any) -> Mock:
+            del args, kwargs
+            captured["argv"] = argv
+            captured["content"] = Path(argv[1]).read_text()
+            return Mock(returncode=0)
+
+        monkeypatch.setattr("jnav.detail_tree.subprocess.run", fake_run)
+        monkeypatch.setenv("EDITOR", "vim")
+        dt.action_view_value()
+        assert captured["argv"][1].endswith(".json")
+        assert captured["content"] == json.dumps({"k": 1}, indent=2)
+
+    def test_dict_with_nested_expanded_string_writes_parsed_json(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        value: JsonValue = {
+            "id": 7,
+            "payload": ExpandedString(original='{"k": [1, 2]}', parsed={"k": [1, 2]}),
+        }
+        dt = _make_detail_tree(cursor_data={"path": NodePath() / "obj", "value": value})
+        _install_app_mock(dt, monkeypatch)
+        captured: dict[str, Any] = {}
+
+        def fake_run(argv: list[str], *args: Any, **kwargs: Any) -> Mock:
+            del args, kwargs
+            captured["content"] = Path(argv[1]).read_text()
+            return Mock(returncode=0)
+
+        monkeypatch.setattr("jnav.detail_tree.subprocess.run", fake_run)
+        monkeypatch.setenv("EDITOR", "vim")
+        dt.action_view_value()
+        assert captured["content"] == json.dumps(
+            {"id": 7, "payload": {"k": [1, 2]}}, indent=2
+        )
 
     def test_falls_back_to_less_when_editor_unset(
         self, monkeypatch: pytest.MonkeyPatch

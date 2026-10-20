@@ -34,7 +34,7 @@ def children(value: JsonValue) -> Iterable[tuple[int | str, JsonValue]]:
     return ()
 
 
-def to_json(entry: JsonValue) -> str:
+def to_json(entry: JsonValue, *, indent: bool = False) -> str:
     def _json_default(obj: object) -> object:
         if isinstance(obj, ExpandedString):
             return obj.parsed
@@ -42,8 +42,11 @@ def to_json(entry: JsonValue) -> str:
             f"Object of type {obj.__class__.__name__} is not JSON serializable"
         )
 
+    option = orjson.OPT_PASSTHROUGH_DATACLASS
+    if indent:
+        option |= orjson.OPT_INDENT_2
     return orjson.dumps(
         entry,
         default=_json_default,
-        option=orjson.OPT_PASSTHROUGH_DATACLASS,
+        option=option,
     ).decode()

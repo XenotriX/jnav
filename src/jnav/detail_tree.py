@@ -1,4 +1,3 @@
-import json
 import os
 import subprocess
 import tempfile
@@ -12,7 +11,7 @@ from textual.widgets.tree import TreeNode
 
 from .filter_provider import FilterProvider
 from .filtering import jq_value_literal
-from .json_model import JsonValue, children, is_container
+from .json_model import JsonValue, children, is_container, to_json
 from .key_sequences import KeySequence, KeySequenceMixin
 from .log_entry_item import render_summary
 from .node_path import NodePath
@@ -263,8 +262,8 @@ class DetailTree(KeySequenceMixin, Tree[TreeNodeData]):
         if node is None or node.data is None:
             return
         value = node.data["value"]
-        if isinstance(value, (dict, list)):
-            content = json.dumps(value, indent=2, default=str)
+        if is_container(value):
+            content = to_json(value, indent=True)
             suffix = ".json"
         else:
             content = str(value)
