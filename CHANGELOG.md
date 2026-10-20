@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-20
+
 ### Added
 
 - Support for any JSONL file, not just log records. Lines whose top-level value is not an object, such as arrays, strings or numbers, are shown instead of skipped. When no timestamp, level or message is detected, the summary shows the whole entry. Nested fields can be detected as the timestamp, level or message.
@@ -58,5 +60,6 @@ First release.
 - `r` to reset filters, selected fields and search.
 - `--version` to print the version.
 
-[Unreleased]: https://github.com/XenotriX/jnav/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/XenotriX/jnav/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/XenotriX/jnav/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/XenotriX/jnav/releases/tag/v1.0.0
